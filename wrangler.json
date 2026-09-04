@@ -28,8 +28,8 @@
   },
   "upload_source_maps": true,
   "vars": {
-    "TWITCH_CLIENT_ID": "TWITCH_CLIENT_ID",
-    "TWITCH_CLIENT_SECRET": "TWITCH_CLIENT_SECRET",
+    "TWITCH_CLIENT_ID": "SEU_CLIENT_ID_AQUI",
+    "TWITCH_CLIENT_SECRET": "SEU_CLIENT_SECRET_AQUI",
     "TWITCH_REDIRECT_URI": "https://durable-chat-template.marcelcantagalo.workers.dev/twitch/callback"
   }
 }
