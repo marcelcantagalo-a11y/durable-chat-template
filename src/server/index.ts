@@ -471,7 +471,17 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    ai.class = "TANK";
+    const validClasses = [
+      "TANK",
+      "WARRIOR",
+      "ARCHER",
+      "MAGE",
+      "PRIEST"
+    ];
+
+    if(!validClasses.includes(ai.class)){
+      ai.class = this.getRandomAIClass();
+    }
 
     const stats = this.getClassStats(ai.class);
 
@@ -714,7 +724,7 @@ export class Chat extends Server<Env> {
 
       const ai = this.players.get("AI-1");
       if(ai){
-        const newClass = this.getRandomAIClass();
+        const newClass = "TANK";
         const stats = this.getClassStats(newClass);
         ai.position = 0; ai.class = newClass; ai.maxHp = stats.maxHp; ai.hp = stats.maxHp;
         ai.alive = true; ai.taunt = false; ai.totalDamage = 0; ai.healing = 0;
@@ -2353,7 +2363,7 @@ export class Chat extends Server<Env> {
                 this.players.get("AI-1");
 
             if(ai){
-                const newClass = this.getRandomAIClass();
+                const newClass = "TANK";
                 const stats = this.getClassStats(newClass);
 
                 ai.position = 0;
