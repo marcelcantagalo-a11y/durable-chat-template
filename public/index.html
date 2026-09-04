@@ -2657,6 +2657,24 @@ multiplayerSocket.onmessage = (event) => {
         nextPlayerId = 1;
 
         gameOverHandled = false;
+        bossEnding = false;
+        battlePaused = false;
+
+        /* =====================================
+           🔄 LIMPA COMPLETAMENTE O GAME OVER
+           antes de reconstruir a nova batalha.
+        ===================================== */
+
+        victory.classList.remove("active");
+        victory.classList.remove("gameOver");
+        flash.classList.remove("active");
+
+        const trophyElement =
+            victory.querySelector(".victoryTrophy");
+
+        if(trophyElement){
+            trophyElement.style.display = "block";
+        }
 
     }
 
@@ -2912,6 +2930,43 @@ multiplayerSocket.onmessage = (event) => {
 
 
             if(alreadyExists){
+
+                const existingPlayer =
+                    players.find(
+                        player =>
+                            player.remoteId ===
+                            remotePlayer.id ||
+                            (
+                                remotePlayer.isAI === true &&
+                                player.isAI === true
+                            )
+                    );
+
+                if(existingPlayer){
+                    existingPlayer.serverPosition =
+                        remotePlayer.position;
+                    existingPlayer.level =
+                        remotePlayer.level || 1;
+                    existingPlayer.xp =
+                        remotePlayer.xp || 0;
+                    existingPlayer.maxHp =
+                        remotePlayer.maxHp || existingPlayer.maxHp;
+                    existingPlayer.hp =
+                        remotePlayer.isAI === true
+                            ? existingPlayer.maxHp
+                            : (remotePlayer.hp ?? existingPlayer.hp);
+                    existingPlayer.alive =
+                        remotePlayer.isAI === true
+                            ? true
+                            : (remotePlayer.alive ?? existingPlayer.alive);
+                    existingPlayer.totalDamage =
+                        remotePlayer.totalDamage || 0;
+                    existingPlayer.healing =
+                        remotePlayer.healing || 0;
+
+                    updatePlayerUI(existingPlayer);
+                }
+
                 return;
             }
 
@@ -2982,12 +3037,14 @@ multiplayerSocket.onmessage = (event) => {
                     classData.hp,
 
                 hp:
-                    remotePlayer.hp ??
-                    classData.hp,
+                    remotePlayer.isAI === true
+                        ? (remotePlayer.maxHp || classData.hp)
+                        : (remotePlayer.hp ?? classData.hp),
 
                 alive:
-                    remotePlayer.alive ??
-                    true,
+                    remotePlayer.isAI === true
+                        ? true
+                        : (remotePlayer.alive ?? true),
 
                 totalDamage:
                     remotePlayer.totalDamage ||
@@ -5559,7 +5616,9 @@ function killPlayer(player){
 
     const alivePlayers =
         players.filter(
-            player => player.alive
+            player =>
+                player.alive &&
+                !player.isAI
         );
 
 
