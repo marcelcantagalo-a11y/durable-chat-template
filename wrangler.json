@@ -1,12 +1,11 @@
 name = "durable-chat-template"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
-compatibility_flags = ["nodejs_compat"]
 
 # Variáveis de ambiente para Twitch
 [vars]
-TWITCH_CLIENT_ID = "TWITCH_CLIENT_ID"
-TWITCH_CLIENT_SECRET = "TWITCH_CLIENT_SECRET"
+TWITCH_CLIENT_ID = "SEU_CLIENT_ID_AQUI"
+TWITCH_CLIENT_SECRET = "SEU_CLIENT_SECRET_AQUI"
 TWITCH_REDIRECT_URI = "https://durable-chat-template.marcelcantagalo.workers.dev/twitch/callback"
 
 # Durable Objects - Configuração OBRIGATÓRIA
@@ -20,16 +19,10 @@ bindings = [
 tag = "v1"
 new_classes = ["Chat"]
 
-# Assets - Para servir o HTML
-[assets]
-directory = "./public"
+# Servir arquivos estáticos (HTML, CSS, JS)
+[env.assets]
 binding = "ASSETS"
 
-# Minify para produção (opcional)
-[build]
-command = "npm run build"
-watch_dir = "src"
-
-# Observações (opcional)
+# Configuração de observabilidade (opcional)
 [observability]
 enabled = true
