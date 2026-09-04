@@ -1,15 +1,14 @@
+import { Server, type Connection, type WSMessage, routePartykitRequest } from "partyserver";
+
 // src/server/index.ts
-var Chat = class extends Server {
-  static {
-    __name(this, "Chat");
-  }
+export class Chat extends Server<Env> {
 
   static options = {
     hibernate: false
   };
 
-  players = new Map();
-  gameState = null;
+  players = new Map<string, any>();
+  gameState: any = null;
   lastSkillClass = null;
 
   getOrderedPlayers() {
@@ -46,7 +45,7 @@ var Chat = class extends Server {
     );
   }
 
-  onConnect(connection) {
+  onConnect(connection: Connection) {
     console.log(
       "🟢 PLAYER CONNECTED:",
       connection.id
@@ -55,12 +54,12 @@ var Chat = class extends Server {
     this.sendRoomState(connection);
   }
 
-  onMessage(connection, message) {
+  onMessage(connection: Connection, message: WSMessage) {
 
     try {
 
-        const data =
-            JSON.parse(message);
+        const data: any =
+            JSON.parse(message as string);
 
 
 
@@ -1655,10 +1654,10 @@ var Chat = class extends Server {
 }
 
   onClose(
-    connection,
-    code,
-    reason,
-    wasClean
+    connection: Connection,
+    code: number,
+    reason: string,
+    wasClean: boolean
   ){
 
     const player =
@@ -1690,9 +1689,9 @@ var Chat = class extends Server {
 
   }
 
-};
+}
 
-var index_default = {
+export default {
   async fetch(
     request,
     env
@@ -1707,9 +1706,6 @@ var index_default = {
   }
 };
 
-export {
-  Chat,
-  index_default as default
-};
+
 
 //# sourceMappingURL=index.js.map
