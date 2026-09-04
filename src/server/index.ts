@@ -169,7 +169,7 @@ export class Chat extends Server<Env> {
     }
 
     // IA morta não ataca e não revive.
-    if (!ai.alive || ai.hp <= 0) {
+    if (!ai.alive || Number(ai.hp) <= 0) {
       return;
     }
 
@@ -192,40 +192,58 @@ export class Chat extends Server<Env> {
     // ============================================================
     if (ai.class === "PRIEST") {
 
-      // Primeiro procura humanos vivos e feridos.
-      const damagedHumans = livingPlayers.filter(
-        player =>
-          !player.isAI &&
-          Number(player.hp) > 0 &&
-          Number(player.hp) < Number(player.maxHp)
-      );
-
-      let target = null;
-
-      if (damagedHumans.length > 0) {
-
-        // Prioriza quem possui a menor porcentagem de HP.
-        damagedHumans.sort(
+      // ============================================================
+      // Procura SOMENTE humanos vivos e machucados.
+      // A IA nunca deve curar outro AI.
+      // ============================================================
+      const damagedHumans = [
+        ...this.players.values()
+      ]
+        .filter(
+          player =>
+            player.isAI !== true &&
+            player.alive === true &&
+            Number(player.hp) > 0 &&
+            Number(player.maxHp) > 0 &&
+            Number(player.hp) < Number(player.maxHp)
+        )
+        .sort(
           (a, b) => {
+
             const ratioA =
-              Number(a.hp) / Math.max(1, Number(a.maxHp));
+              Number(a.hp) /
+              Math.max(
+                1,
+                Number(a.maxHp)
+              );
 
             const ratioB =
-              Number(b.hp) / Math.max(1, Number(b.maxHp));
+              Number(b.hp) /
+              Math.max(
+                1,
+                Number(b.maxHp)
+              );
 
             return ratioA - ratioB;
           }
         );
 
-        target = damagedHumans[0];
+      let target: any = null;
 
-      } else if (
+      // Primeiro cura o humano mais necessitado.
+      if (damagedHumans.length > 0) {
+        target = damagedHumans[0];
+      }
+
+      // Se nenhum humano estiver machucado,
+      // o Priest pode curar a si mesmo.
+      if (
+        !target &&
+        ai.alive === true &&
         Number(ai.hp) > 0 &&
+        Number(ai.maxHp) > 0 &&
         Number(ai.hp) < Number(ai.maxHp)
       ) {
-
-        // Se nenhum humano precisa de cura,
-        // o Priest cura a si mesmo.
         target = ai;
       }
 
@@ -234,48 +252,72 @@ export class Chat extends Server<Env> {
         return;
       }
 
-      let heal =
-        Math.floor(Math.random() * 16) + 15;
+      // ============================================================
+      // CALCULA A CURA
+      // ============================================================
 
-      heal += ai.level * 2;
+      let heal =
+        Math.floor(
+          Math.random() * 16
+        ) + 15;
+
+      heal +=
+        Number(ai.level || 1) * 2;
 
       const healingPower =
         typeof ai.healingPower === "number"
           ? ai.healingPower
           : 1;
 
-      heal = Math.floor(
-        heal * healingPower
-      );
+      heal =
+        Math.floor(
+          heal * healingPower
+        );
+
+      const currentHp =
+        Number(target.hp);
+
+      const maxHp =
+        Number(target.maxHp);
 
       const missingHp =
         Math.max(
           0,
-          Number(target.maxHp) - Number(target.hp)
+          maxHp - currentHp
         );
 
-      heal = Math.min(
-        heal,
-        missingHp
-      );
+      heal =
+        Math.min(
+          heal,
+          missingHp
+        );
 
       if (heal <= 0) {
         return;
       }
 
-      target.hp =
+      // ============================================================
+      // APLICA A CURA NO ESTADO OFICIAL DO SERVIDOR
+      // ============================================================
+
+      const newHp =
         Math.min(
-          Number(target.maxHp),
-          Number(target.hp) + heal
+          maxHp,
+          currentHp + heal
         );
 
-      target.alive =
-        target.hp > 0;
+      target.hp = newHp;
+      target.maxHp = maxHp;
+      target.alive = newHp > 0;
 
       ai.healing =
-        Number(ai.healing || 0) + heal;
+        Number(ai.healing || 0) +
+        heal;
 
-      // Salva os dois estados oficiais.
+      // ============================================================
+      // SALVA NOVAMENTE OS DOIS ESTADOS OFICIAIS
+      // ============================================================
+
       this.players.set(
         target.id,
         target
@@ -286,32 +328,72 @@ export class Chat extends Server<Env> {
         ai
       );
 
-      // Resultado específico da cura.
+      // ============================================================
+      // PRIMEIRO: playerUpdated
+      //
+      // Isso atualiza diretamente o jogador curado nos clientes.
+      // ============================================================
+
+      this.broadcast(
+        JSON.stringify({
+          type: "playerUpdated",
+          player: {
+            ...target
+          }
+        })
+      );
+
+      // ============================================================
+      // SEGUNDO: healResult
+      //
+      // Mantém o efeito visual/contador de cura existente.
+      // ============================================================
+
       this.broadcast(
         JSON.stringify({
           type: "healResult",
 
-          healerId: ai.id,
-          healerName: ai.name,
-          healerClass: ai.class,
+          healerId:
+            ai.id,
 
-          targetId: target.id,
-          targetName: target.name,
+          healerName:
+            ai.name,
 
-          heal: heal,
+          healerClass:
+            ai.class,
 
-          hp: target.hp,
-          maxHp: target.maxHp,
-          alive: target.alive,
+          targetId:
+            target.id,
 
-          healerHealing: ai.healing,
+          targetName:
+            target.name,
 
-          isAI: true
+          heal:
+            heal,
+
+          hp:
+            target.hp,
+
+          maxHp:
+            target.maxHp,
+
+          alive:
+            target.alive,
+
+          healerHealing:
+            ai.healing,
+
+          isAI:
+            true
         })
       );
 
-      // Também manda o estado completo oficial.
-      // Isso impede que algum cliente fique com HP antigo.
+      // ============================================================
+      // TERCEIRO: estado completo oficial
+      //
+      // Garante que todos os clientes terminem com o mesmo HP.
+      // ============================================================
+
       this.broadcastRoomState();
 
       console.log(
@@ -321,7 +403,11 @@ export class Chat extends Server<Env> {
         target.name,
         "+",
         heal,
-        "HP"
+        "HP |",
+        "HP:",
+        target.hp,
+        "/",
+        target.maxHp
       );
 
       return;
@@ -1753,12 +1839,12 @@ export class Chat extends Server<Env> {
           const targetWeights:
             Record<string, number> = {
 
-              TANK: 40,
-              WARRIOR: 25,
-              ARCHER: 18,
-              MAGE: 12,
-              PRIEST: 5
-            };
+            TANK: 40,
+            WARRIOR: 25,
+            ARCHER: 18,
+            MAGE: 12,
+            PRIEST: 5
+          };
 
           const weightedPlayers: any[] =
             [];
