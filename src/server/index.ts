@@ -281,7 +281,7 @@ export class Chat extends Server<Env> {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${appTokenData.access_token}`,
+          "Authorization": `Bearer ${tokenData.access_token}`,
           "Client-Id": clientId,
           "Content-Type": "application/json"
         },
@@ -289,7 +289,8 @@ export class Chat extends Server<Env> {
           type: "channel.chat.message",
           version: "1",
           condition: {
-            broadcaster_user_id: twitchUser.id
+            broadcaster_user_id: twitchUser.id,
+            user_id: twitchUser.id
           },
           transport: {
             method: "webhook",
