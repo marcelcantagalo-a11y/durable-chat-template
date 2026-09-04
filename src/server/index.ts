@@ -19,35 +19,39 @@ export class Chat extends Server<Env> {
         maxHp: 220,
         minDamage: 25,
         maxDamage: 45,
-        speed: 3000,
+        speed: 4000,
         accuracy: 1.00
       },
+
       WARRIOR: {
         maxHp: 150,
         minDamage: 50,
         maxDamage: 80,
-        speed: 2500,
+        speed: 3000,
         accuracy: 0.90
       },
+
       ARCHER: {
         maxHp: 90,
         minDamage: 35,
         maxDamage: 65,
-        speed: 1000,
+        speed: 1500,
         accuracy: 0.80
       },
+
       MAGE: {
         maxHp: 85,
         minDamage: 80,
         maxDamage: 130,
-        speed: 2800,
+        speed: 5000,
         accuracy: 0.70
       },
+
       PRIEST: {
         maxHp: 80,
         minDamage: 0,
         maxDamage: 0,
-        speed: 4000,
+        speed: 3000,
         accuracy: 1.00
       }
     };
@@ -123,7 +127,6 @@ export class Chat extends Server<Env> {
     ai.isAI = true;
     ai.maxHp = stats.maxHp;
 
-    // Não revive a IA aqui.
     if (typeof ai.hp !== "number") {
       ai.hp = ai.alive ? stats.maxHp : 0;
     }
@@ -139,9 +142,11 @@ export class Chat extends Server<Env> {
 
     const ai = this.players.get("AI-1");
 
-    const stats = ai
-      ? this.getClassStats(ai.class)
-      : this.getClassStats("WARRIOR");
+    if (!ai) {
+      return;
+    }
+
+    const stats = this.getClassStats(ai.class);
 
     const wait =
       typeof delay === "number"
@@ -150,8 +155,11 @@ export class Chat extends Server<Env> {
 
     this.botTimer = setTimeout(() => {
       this.botTimer = null;
+
       this.aiAttack();
+
       this.scheduleAIAttack();
+
     }, wait);
   }
 
@@ -168,34 +176,18 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    // IA morta não ataca e não revive.
     if (!ai.alive || Number(ai.hp) <= 0) {
-      return;
-    }
-
-    const livingPlayers = [
-      ...this.players.values()
-    ].filter(
-      player =>
-        player.alive === true &&
-        Number(player.hp) > 0
-    );
-
-    if (livingPlayers.length === 0) {
       return;
     }
 
     const stats = this.getClassStats(ai.class);
 
     // ============================================================
-    // PRIEST AI
+    // PRIEST
     // ============================================================
+
     if (ai.class === "PRIEST") {
 
-      // ============================================================
-      // Procura SOMENTE humanos vivos e machucados.
-      // A IA nunca deve curar outro AI.
-      // ============================================================
       const damagedHumans = [
         ...this.players.values()
       ]
@@ -230,13 +222,10 @@ export class Chat extends Server<Env> {
 
       let target: any = null;
 
-      // Primeiro cura o humano mais necessitado.
       if (damagedHumans.length > 0) {
         target = damagedHumans[0];
       }
 
-      // Se nenhum humano estiver machucado,
-      // o Priest pode curar a si mesmo.
       if (
         !target &&
         ai.alive === true &&
@@ -247,14 +236,9 @@ export class Chat extends Server<Env> {
         target = ai;
       }
 
-      // Ninguém precisa de cura.
       if (!target) {
         return;
       }
-
-      // ============================================================
-      // CALCULA A CURA
-      // ============================================================
 
       let heal =
         Math.floor(
@@ -296,10 +280,6 @@ export class Chat extends Server<Env> {
         return;
       }
 
-      // ============================================================
-      // APLICA A CURA NO ESTADO OFICIAL DO SERVIDOR
-      // ============================================================
-
       const newHp =
         Math.min(
           maxHp,
@@ -314,10 +294,6 @@ export class Chat extends Server<Env> {
         Number(ai.healing || 0) +
         heal;
 
-      // ============================================================
-      // SALVA NOVAMENTE OS DOIS ESTADOS OFICIAIS
-      // ============================================================
-
       this.players.set(
         target.id,
         target
@@ -328,12 +304,6 @@ export class Chat extends Server<Env> {
         ai
       );
 
-      // ============================================================
-      // PRIMEIRO: playerUpdated
-      //
-      // Isso atualiza diretamente o jogador curado nos clientes.
-      // ============================================================
-
       this.broadcast(
         JSON.stringify({
           type: "playerUpdated",
@@ -342,12 +312,6 @@ export class Chat extends Server<Env> {
           }
         })
       );
-
-      // ============================================================
-      // SEGUNDO: healResult
-      //
-      // Mantém o efeito visual/contador de cura existente.
-      // ============================================================
 
       this.broadcast(
         JSON.stringify({
@@ -388,12 +352,6 @@ export class Chat extends Server<Env> {
         })
       );
 
-      // ============================================================
-      // TERCEIRO: estado completo oficial
-      //
-      // Garante que todos os clientes terminem com o mesmo HP.
-      // ============================================================
-
       this.broadcastRoomState();
 
       console.log(
@@ -414,7 +372,20 @@ export class Chat extends Server<Env> {
     }
 
     // ============================================================
-    // OUTRAS CLASSES
+    // MAGE / TANK / WARRIOR / ARCHER
+    // ============================================================
+
+    if (
+      ai.class !== "TANK" &&
+      ai.class !== "WARRIOR" &&
+      ai.class !== "ARCHER" &&
+      ai.class !== "MAGE"
+    ) {
+      return;
+    }
+
+    // ============================================================
+    // ACCURACY
     // ============================================================
 
     if (Math.random() > stats.accuracy) {
@@ -436,8 +407,18 @@ export class Chat extends Server<Env> {
         })
       );
 
+      console.log(
+        "❌ AI MISS:",
+        ai.name,
+        ai.class
+      );
+
       return;
     }
+
+    // ============================================================
+    // DAMAGE
+    // ============================================================
 
     let damage =
       Math.floor(
@@ -455,9 +436,13 @@ export class Chat extends Server<Env> {
         damage *
         (
           1 +
-          (ai.level - 1) * 0.08
+          (Number(ai.level || 1) - 1) * 0.08
         )
       );
+
+    // ============================================================
+    // CRITICAL
+    // ============================================================
 
     const critical =
       Math.random() < 0.11;
@@ -472,10 +457,15 @@ export class Chat extends Server<Env> {
         this.gameState.bossHp
       );
 
+    // ============================================================
+    // BOSS DAMAGE
+    // ============================================================
+
     this.gameState.bossHp -=
       damage;
 
-    ai.totalDamage +=
+    ai.totalDamage =
+      Number(ai.totalDamage || 0) +
       damage;
 
     this.players.set(
@@ -486,18 +476,52 @@ export class Chat extends Server<Env> {
     this.broadcast(
       JSON.stringify({
         type: "attackResult",
-        playerId: ai.id,
-        name: ai.name,
-        class: ai.class,
-        hit: true,
-        damage: damage,
-        critical: critical,
-        bossHp: this.gameState.bossHp,
-        maxBossHp: this.gameState.maxBossHp,
-        totalDamage: ai.totalDamage,
-        level: ai.level,
-        isAI: true
+
+        playerId:
+          ai.id,
+
+        name:
+          ai.name,
+
+        class:
+          ai.class,
+
+        hit:
+          true,
+
+        damage:
+          damage,
+
+        critical:
+          critical,
+
+        bossHp:
+          this.gameState.bossHp,
+
+        maxBossHp:
+          this.gameState.maxBossHp,
+
+        totalDamage:
+          ai.totalDamage,
+
+        level:
+          ai.level,
+
+        isAI:
+          true
       })
+    );
+
+    console.log(
+      "🤖 AI ATTACK:",
+      ai.name,
+      "| CLASS:",
+      ai.class,
+      "| SPEED:",
+      stats.speed,
+      "ms | DAMAGE:",
+      damage,
+      critical ? "CRITICAL" : ""
     );
   }
 
@@ -900,7 +924,6 @@ export class Chat extends Server<Env> {
           player => !player.isAI
         );
 
-    // 1 IA + 29 humanos = 30 total.
     if (humanPlayers.length >= 29) {
       return {
         ok: false,
@@ -1368,7 +1391,6 @@ export class Chat extends Server<Env> {
           return;
         }
 
-        // Máximo: 29 humanos + 1 IA.
         const humanCount =
           [...this.players.values()]
             .filter(
@@ -1379,9 +1401,12 @@ export class Chat extends Server<Env> {
           return;
         }
 
+        const playerClass =
+          data.class || "WARRIOR";
+
         const maxHp =
           this.getClassStats(
-            data.class || "WARRIOR"
+            playerClass
           ).maxHp;
 
         const player = {
@@ -1395,7 +1420,7 @@ export class Chat extends Server<Env> {
             ).slice(0, 8),
 
           class:
-            data.class || "WARRIOR",
+            playerClass,
 
           position:
             Math.max(
@@ -1482,17 +1507,6 @@ export class Chat extends Server<Env> {
           const incoming =
             data.player || {};
 
-          /*
-           * IMPORTANTE:
-           * O navegador NÃO pode alterar o estado de combate.
-           *
-           * HP, maxHP, alive, healing e totalDamage
-           * são controlados pelo Worker.
-           *
-           * Isso impede que um update antigo do navegador
-           * desfaça uma cura realizada pelo Priest.
-           */
-
           if (
             typeof incoming.name ===
             "string"
@@ -1522,20 +1536,6 @@ export class Chat extends Server<Env> {
             player.taunt =
               incoming.taunt;
           }
-
-          /*
-           * NÃO copiar:
-           * hp
-           * maxHp
-           * alive
-           * healing
-           * totalDamage
-           * level
-           * xp
-           * class
-           * id
-           * isAI
-           */
 
           this.players.set(
             connection.id,
@@ -2008,8 +2008,7 @@ export class Chat extends Server<Env> {
           (
             this.gameState.bossLevel -
             1
-          ) *
-          40;
+          ) * 40;
 
         attackSpeed =
           Math.max(
