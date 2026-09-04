@@ -3495,6 +3495,168 @@ multiplayerSocket.onmessage = (event) => {
             targetPlayer.maxHp = data.maxHp;
             targetPlayer.alive = data.alive;
 
+            /* =====================================
+               💀 CHECK GAME OVER — OFFICIAL BOSS HIT
+               The Worker has just confirmed the death.
+            ===================================== */
+
+            const alivePlayersAfterBossHit =
+                players.filter(
+                    player => player.alive
+                );
+
+            if(
+                wasAlive &&
+                !targetPlayer.alive &&
+                alivePlayersAfterBossHit.length === 0
+            ){
+
+                bossEnding = true;
+                battlePaused = true;
+
+                const trophyElement =
+                    victory.querySelector(
+                        ".victoryTrophy"
+                    );
+
+                if(trophyElement){
+                    trophyElement.style.display =
+                        "none";
+                }
+
+                /* =====================================
+                   💀 GAME OVER SOUND — 3X
+                ===================================== */
+
+                const gameOverSound1 =
+                    new Audio("gameover.mp3");
+
+                const gameOverSound2 =
+                    new Audio("gameover.mp3");
+
+                const gameOverSound3 =
+                    new Audio("gameover.mp3");
+
+                gameOverSound1.volume = 1.0;
+                gameOverSound2.volume = 1.0;
+                gameOverSound3.volume = 1.0;
+
+                gameOverSound1.play()
+                    .catch(()=>{});
+
+                gameOverSound2.play()
+                    .catch(()=>{});
+
+                gameOverSound3.play()
+                    .catch(()=>{});
+
+                /* =====================================
+                   😈 GAME OVER LAUGH
+                ===================================== */
+
+                setTimeout(() => {
+
+                    const gameOverLaugh =
+                        new Audio("gameoverlaugh.mp3");
+
+                    gameOverLaugh.volume = 1.0;
+
+                    gameOverLaugh.play()
+                        .catch(()=>{});
+
+                },2000);
+
+                /* =====================================
+                   ☠️ GAME OVER SCREEN
+                ===================================== */
+
+                const titleElement =
+                    victory.querySelector(
+                        ".victoryTitle"
+                    );
+
+                if(titleElement){
+                    titleElement.textContent =
+                        "GAME OVER";
+                }
+
+                victoryBoss.textContent =
+                    "💀";
+
+                victoryText.textContent =
+                    "NEW BATTLE IN 10";
+
+                victory.classList.add(
+                    "gameOver"
+                );
+
+                victory.classList.add(
+                    "active"
+                );
+
+                flash.classList.add(
+                    "active"
+                );
+
+                eventBox.textContent =
+                    "💀 THE BOSS WON! NEW BATTLE IN 10 SECONDS!";
+
+                addEvent(
+                    "💀 GAME OVER!"
+                );
+
+                /* =====================================
+                   ⏱️ COUNTDOWN FOR NEW BATTLE
+                ===================================== */
+
+                let countdown = 10;
+
+                const restartInterval =
+                    setInterval(() => {
+
+                        countdown--;
+
+                        if(countdown > 0){
+
+                            victoryText.textContent =
+                                "NEW BATTLE IN " +
+                                countdown;
+
+                        }
+                        else{
+
+                            clearInterval(
+                                restartInterval
+                            );
+
+                            victory.classList.remove(
+                                "active"
+                            );
+
+                            victory.classList.remove(
+                                "gameOver"
+                            );
+
+                            flash.classList.remove(
+                                "active"
+                            );
+
+                            bossEnding = false;
+
+                            battlePaused = false;
+
+                            /*
+                               O fluxo normal de reinício
+                               existente continua sendo
+                               executado pelo código original.
+                            */
+
+                        }
+
+                    },1000);
+
+            }
+
             const bossHitSound =
                 new Audio("golpeboss.mp3");
 
