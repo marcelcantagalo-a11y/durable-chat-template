@@ -2646,6 +2646,18 @@ multiplayerSocket.onmessage = (event) => {
 
         if(data.type === "roomState"){
 
+    if(data.reset === true){
+
+        players.length = 0;
+
+        if(playersContainer){
+            playersContainer.innerHTML = "";
+        }
+
+        nextPlayerId = 1;
+
+    }
+
     console.log(
         "👥 PLAYERS IN ROOM:",
         data.players
@@ -2853,6 +2865,7 @@ multiplayerSocket.onmessage = (event) => {
             */
 
             if(
+                !remotePlayer.isAI &&
                 localPlayer &&
                 localPlayer.name ===
                     remotePlayer.name &&
@@ -2924,6 +2937,9 @@ multiplayerSocket.onmessage = (event) => {
 
                 serverPosition:
                     remotePlayer.position,
+
+                isAI:
+                    remotePlayer.isAI === true,
 
                 name:
                     remotePlayer.name,
@@ -3050,6 +3066,9 @@ multiplayerSocket.onmessage = (event) => {
 
                 serverPosition:
                     remotePlayer.position,
+
+                isAI:
+                    remotePlayer.isAI === true,
 
                 name:
                     remotePlayer.name,
@@ -3502,7 +3521,9 @@ multiplayerSocket.onmessage = (event) => {
 
             const alivePlayersAfterBossHit =
                 players.filter(
-                    player => player.alive
+                    player =>
+                        player.alive &&
+                        !player.isAI
                 );
 
             if(
@@ -3641,15 +3662,113 @@ multiplayerSocket.onmessage = (event) => {
                                 "active"
                             );
 
+                            /* =========================
+                               🔄 RESTART BATTLE
+                               RESET SERVER + KEEP ONE AI
+                            ========================= */
+
+                            players.length = 0;
+
+                            if(playersContainer){
+                                playersContainer.innerHTML = "";
+                            }
+
+                            nextPlayerId = 1;
+
+                            bossLevel = 1;
+
+                            currentBoss =
+                                generateBoss(
+                                    bossLevel
+                                );
+
+                            maxBossHp =
+                                currentBoss.hp;
+
+                            bossHp =
+                                maxBossHp;
+
+                            wins = 0;
+
                             bossEnding = false;
 
                             battlePaused = false;
 
-                            /*
-                               O fluxo normal de reinício
-                               existente continua sendo
-                               executado pelo código original.
-                            */
+                            /* =====================================
+                               🏆 RESET VICTORY SCREEN
+                            ===================================== */
+
+                            const trophyElement =
+                                victory.querySelector(
+                                    ".victoryTrophy"
+                                );
+
+                            if(trophyElement){
+                                trophyElement.style.display =
+                                    "";
+                            }
+
+                            victory.classList.remove(
+                                "active"
+                            );
+
+                            victory.classList.remove(
+                                "gameOver"
+                            );
+
+                            flash.classList.remove(
+                                "active"
+                            );
+
+                            eventBox.textContent =
+                                "⚔️ STARTING NEW BATTLE...";
+
+                            addEvent(
+                                "⚔️ NEW BATTLE — AI READY"
+                            );
+
+                            /* =====================================
+                               🌐 RESET OFFICIAL SERVER
+                               Server removes old humans and
+                               recreates exactly one AI.
+                            ===================================== */
+
+                            if(
+                                multiplayerSocket.readyState ===
+                                WebSocket.OPEN
+                            ){
+
+                                multiplayerSocket.send(
+                                    JSON.stringify({
+
+                                        type:
+                                            "resetGame",
+
+                                        gameState:{
+
+                                            bossLevel:
+                                                bossLevel,
+
+                                            currentBoss:
+                                                currentBoss,
+
+                                            maxBossHp:
+                                                maxBossHp,
+
+                                            bossHp:
+                                                bossHp,
+
+                                            wins:
+                                                wins
+
+                                        }
+
+                                    })
+                                );
+
+                            }
+
+                            update();
 
                         }
 
@@ -5706,7 +5825,9 @@ function killPlayer(player){
 
     const alivePlayers =
         players.filter(
-            player => player.alive
+            player =>
+                player.alive &&
+                !player.isAI
         );
 
 
