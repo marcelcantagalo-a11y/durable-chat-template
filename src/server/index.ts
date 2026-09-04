@@ -385,26 +385,13 @@ export class Chat extends Server<Env> {
       socket.addEventListener("open", () => {
         console.log("🟣 WebSocket Twitch aberto");
         
-        // Envia os comandos um por um com delay
-        setTimeout(() => {
-          socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
-          console.log("📤 CAP REQ enviado");
-        }, 100);
+        // Envia TUDO de uma vez SEM delay
+        socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
+        socket.send(`PASS oauth:${token}\r\n`);
+        socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
+        socket.send("JOIN #bossfightlivearena\r\n");
         
-        setTimeout(() => {
-          socket.send(`PASS oauth:${token}\r\n`);
-          console.log("📤 PASS enviado");
-        }, 200);
-        
-        setTimeout(() => {
-          socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
-          console.log("📤 NICK enviado:", String(login).toLowerCase());
-        }, 300);
-        
-        setTimeout(() => {
-          socket.send("JOIN #bossfightlivearena\r\n");
-          console.log("📤 JOIN enviado para #bossfightlivearena");
-        }, 400);
+        console.log("📤 Comandos enviados: CAP, PASS, NICK, JOIN");
       });
 
       socket.addEventListener("message", (event: MessageEvent) => {
