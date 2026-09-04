@@ -12,6 +12,62 @@ export class Chat extends Server<Env> {
   lastSkillClass = null;
   botTimer: any = null;
 
+  getClassStats(className: string) {
+    const stats: Record<string, any> = {
+      TANK: {
+        maxHp: 220,
+        minDamage: 25,
+        maxDamage: 45,
+        speed: 3000,
+        accuracy: 1.00
+      },
+      WARRIOR: {
+        maxHp: 150,
+        minDamage: 50,
+        maxDamage: 80,
+        speed: 2500,
+        accuracy: 0.90
+      },
+      ARCHER: {
+        maxHp: 90,
+        minDamage: 35,
+        maxDamage: 65,
+        speed: 1000,
+        accuracy: 0.80
+      },
+      MAGE: {
+        maxHp: 85,
+        minDamage: 80,
+        maxDamage: 130,
+        speed: 2800,
+        accuracy: 0.70
+      },
+      PRIEST: {
+        maxHp: 80,
+        minDamage: 0,
+        maxDamage: 0,
+        speed: 4000,
+        accuracy: 1.00
+      }
+    };
+
+    return stats[className] || stats.WARRIOR;
+  }
+
+  getRandomAIClass() {
+    const classes = [
+      "TANK",
+      "WARRIOR",
+      "ARCHER",
+      "MAGE",
+      "PRIEST"
+    ];
+
+    return classes[
+      Math.floor(Math.random() * classes.length)
+    ];
+  }
+
   ensureAI() {
     const aiId = "AI-1";
 
@@ -21,23 +77,73 @@ export class Chat extends Server<Env> {
       }
     }
 
-    if(!this.players.has(aiId)){
-      this.players.set(aiId, {
+    let ai = this.players.get(aiId);
+
+    if(!ai){
+      const aiClass = this.getRandomAIClass();
+      const stats = this.getClassStats(aiClass);
+
+      ai = {
         id: aiId,
         name: "Arena AI",
-        class: "WARRIOR",
+        class: aiClass,
         position: 0,
         level: 1,
         xp: 0,
-        maxHp: 150,
-        hp: 150,
+        maxHp: stats.maxHp,
+        hp: stats.maxHp,
         totalDamage: 0,
         healing: 0,
         alive: true,
         taunt: false,
         isAI: true
-      });
+      };
+
+      this.players.set(aiId, ai);
+      return;
     }
+
+    if(!this.getClassStats(ai.class)){
+      ai.class = this.getRandomAIClass();
+    }
+
+    const stats = this.getClassStats(ai.class);
+
+    ai.id = aiId;
+    ai.name = "Arena AI";
+    ai.isAI = true;
+    ai.maxHp = stats.maxHp;
+
+    // IMPORTANTE: não revive a IA aqui.
+    // Se ela morreu, permanece morta até o reset da batalha.
+    if(typeof ai.hp !== "number"){
+      ai.hp = ai.alive ? stats.maxHp : 0;
+    }
+
+    this.players.set(aiId, ai);
+  }
+
+  scheduleAIAttack(delay?: number) {
+    if(this.botTimer){
+      clearTimeout(this.botTimer);
+      this.botTimer = null;
+    }
+
+    const ai = this.players.get("AI-1");
+    const stats = ai
+      ? this.getClassStats(ai.class)
+      : this.getClassStats("WARRIOR");
+
+    const wait =
+      typeof delay === "number"
+        ? delay
+        : stats.speed;
+
+    this.botTimer = setTimeout(() => {
+      this.botTimer = null;
+      this.aiAttack();
+      this.scheduleAIAttack();
+    }, wait);
   }
 
   aiAttack() {
@@ -63,44 +169,128 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    if(!ai.alive){
-      ai.hp = ai.maxHp;
-      ai.alive = true;
+    // IA morta NÃO ataca e NÃO revive.
+    if(!ai.alive || ai.hp <= 0){
+      return;
+    }
+
+    const stats = this.getClassStats(ai.class);
+
+    // Priest é suporte: cura um jogador vivo que esteja ferido.
+    if(ai.class === "PRIEST"){
+      const damagedPlayers = humanPlayers.filter(
+        player => player.hp < player.maxHp
+      );
+
+      if(damagedPlayers.length === 0){
+        return;
+      }
+
+      damagedPlayers.sort(
+        (a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp)
+      );
+
+      const target = damagedPlayers[0];
+
+      let heal =
+        Math.floor(Math.random() * 16) + 15;
+
+      heal += ai.level * 2;
+
+      const healingPower =
+        typeof ai.healingPower === "number"
+          ? ai.healingPower
+          : 1;
+
+      heal = Math.floor(heal * healingPower);
+      heal = Math.min(heal, target.maxHp - target.hp);
+
+      if(heal <= 0){
+        return;
+      }
+
+      target.hp += heal;
+      ai.healing += heal;
+
+      this.players.set(target.id, target);
+      this.players.set(ai.id, ai);
+
+      this.broadcast(
+        JSON.stringify({
+          type: "healResult",
+          healerId: ai.id,
+          healerName: ai.name,
+          healerClass: ai.class,
+          targetId: target.id,
+          targetName: target.name,
+          heal: heal,
+          hp: target.hp,
+          maxHp: target.maxHp,
+          alive: target.alive,
+          healerHealing: ai.healing,
+          isAI: true
+        })
+      );
+
+      return;
+    }
+
+    // As demais classes usam exatamente a faixa e precisão da classe.
+    if(Math.random() > stats.accuracy){
+      this.broadcast(
+        JSON.stringify({
+          type: "attackResult",
+          playerId: ai.id,
+          name: ai.name,
+          class: ai.class,
+          hit: false,
+          damage: 0,
+          critical: false,
+          bossHp: this.gameState.bossHp,
+          maxBossHp: this.gameState.maxBossHp,
+          totalDamage: ai.totalDamage,
+          level: ai.level,
+          isAI: true
+        })
+      );
+      return;
     }
 
     let damage =
       Math.floor(
-        Math.random() * (80 - 50 + 1)
-      ) + 50;
+        Math.random() *
+        (stats.maxDamage - stats.minDamage + 1)
+      ) + stats.minDamage;
 
-    const critical =
-      Math.random() < 0.11;
+    damage =
+      Math.floor(
+        damage *
+        (
+          1 +
+          (ai.level - 1) * 0.08
+        )
+      );
+
+    const critical = Math.random() < 0.11;
 
     if(critical){
       damage *= 2;
     }
 
-    damage =
-      Math.min(
-        damage,
-        this.gameState.bossHp
-      );
-
-    this.gameState.bossHp -=
-      damage;
-
-    ai.totalDamage +=
-      damage;
-
-    this.players.set(
-      "AI-1",
-      ai
+    damage = Math.min(
+      damage,
+      this.gameState.bossHp
     );
+
+    this.gameState.bossHp -= damage;
+    ai.totalDamage += damage;
+
+    this.players.set(ai.id, ai);
 
     this.broadcast(
       JSON.stringify({
         type: "attackResult",
-        playerId: "AI-1",
+        playerId: ai.id,
         name: ai.name,
         class: ai.class,
         hit: true,
@@ -150,10 +340,12 @@ export class Chat extends Server<Env> {
 
     this.ensureAI();
 
-    this.botTimer =
-      setInterval(() => {
-        this.aiAttack();
-      }, 3500);
+    if(this.botTimer){
+      clearTimeout(this.botTimer);
+      this.botTimer = null;
+    }
+
+    this.scheduleAIAttack();
   }
 
   onConnect(connection: Connection) {
@@ -1739,15 +1931,30 @@ export class Chat extends Server<Env> {
                 this.players.get("AI-1");
 
             if(ai){
+                const newClass = this.getRandomAIClass();
+                const stats = this.getClassStats(newClass);
 
                 ai.position = 0;
-                ai.hp = ai.maxHp;
+                ai.class = newClass;
+                ai.maxHp = stats.maxHp;
+                ai.hp = stats.maxHp;
                 ai.alive = true;
                 ai.taunt = false;
                 ai.totalDamage = 0;
                 ai.healing = 0;
+                ai.level = 1;
+                ai.xp = 0;
+                ai.isAI = true;
 
+                this.players.set("AI-1", ai);
             }
+
+            if(this.botTimer){
+                clearTimeout(this.botTimer);
+                this.botTimer = null;
+            }
+
+            this.scheduleAIAttack();
 
             this.broadcast(
                 JSON.stringify({
