@@ -289,8 +289,7 @@ export class Chat extends Server<Env> {
           type: "channel.chat.message",
           version: "1",
           condition: {
-            broadcaster_user_id: twitchUser.id,
-            user_id: twitchUser.id
+            broadcaster_user_id: twitchUser.id
           },
           transport: {
             method: "webhook",
@@ -724,7 +723,7 @@ export class Chat extends Server<Env> {
 
       const ai = this.players.get("AI-1");
       if(ai){
-        const newClass = "TANK";
+        const newClass = this.getRandomAIClass();
         const stats = this.getClassStats(newClass);
         ai.position = 0; ai.class = newClass; ai.maxHp = stats.maxHp; ai.hp = stats.maxHp;
         ai.alive = true; ai.taunt = false; ai.totalDamage = 0; ai.healing = 0;
@@ -2363,7 +2362,7 @@ export class Chat extends Server<Env> {
                 this.players.get("AI-1");
 
             if(ai){
-                const newClass = "TANK";
+                const newClass = this.getRandomAIClass();
                 const stats = this.getClassStats(newClass);
 
                 ai.position = 0;
