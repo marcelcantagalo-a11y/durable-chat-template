@@ -1,7 +1,6 @@
 import { Server, type Connection, type WSMessage, routePartykitRequest } from "partyserver";
 
 export class Chat extends Server<Env> {
-
   static options = {
     hibernate: false
   };
@@ -11,14 +10,8 @@ export class Chat extends Server<Env> {
   lastSkillClass = null;
   botTimer: any = null;
   resetTimer: any = null;
-  private twitchSocket: WebSocket | null = null;
-  private twitchBuffer = "";
-  private twitchReconnectTimer: any = null;
 
-  // ============================================
-  // MÉTODOS AUXILIARES
-  // ============================================
-
+  // ========== MÉTODOS AUXILIARES ==========
   getClassStats(className: string) {
     const stats: Record<string, any> = {
       TANK: { maxHp: 220, minDamage: 25, maxDamage: 45, speed: 3000, accuracy: 1.00 },
@@ -35,13 +28,9 @@ export class Chat extends Server<Env> {
     return classes[Math.floor(Math.random() * classes.length)];
   }
 
-  // ============================================
-  // IA DO SERVIDOR
-  // ============================================
-
+  // ========== IA DO SERVIDOR ==========
   ensureAI() {
     const aiId = "AI-1";
-    
     for (const [id, player] of this.players) {
       if (player.isAI && id !== aiId) {
         this.players.delete(id);
@@ -49,11 +38,9 @@ export class Chat extends Server<Env> {
     }
 
     let ai = this.players.get(aiId);
-    
     if (!ai) {
       const aiClass = this.getRandomAIClass();
       const stats = this.getClassStats(aiClass);
-      
       ai = {
         id: aiId,
         name: "Arena AI",
@@ -69,7 +56,6 @@ export class Chat extends Server<Env> {
         taunt: false,
         isAI: true
       };
-      
       this.players.set(aiId, ai);
     }
   }
@@ -93,7 +79,6 @@ export class Chat extends Server<Env> {
 
   aiAttack() {
     if (!this.gameState || this.gameState.bossHp <= 0) return;
-    
     const livingPlayers = [...this.players.values()].filter(player => player.alive);
     if (livingPlayers.length === 0) return;
 
@@ -108,7 +93,6 @@ export class Chat extends Server<Env> {
       const damagedPlayers = livingPlayers.filter(
         player => !player.isAI && player.hp < player.maxHp
       );
-      
       if (damagedPlayers.length === 0) return;
       
       damagedPlayers.sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
@@ -123,7 +107,6 @@ export class Chat extends Server<Env> {
 
       target.hp += heal;
       ai.healing += heal;
-      
       this.players.set(target.id, target);
       this.players.set(ai.id, ai);
 
@@ -165,10 +148,8 @@ export class Chat extends Server<Env> {
 
     let damage = Math.floor(Math.random() * (stats.maxDamage - stats.minDamage + 1)) + stats.minDamage;
     damage = Math.floor(damage * (1 + (ai.level - 1) * 0.08));
-    
     const critical = Math.random() < 0.11;
     if (critical) damage *= 2;
-    
     damage = Math.min(damage, this.gameState.bossHp);
     
     this.gameState.bossHp -= damage;
@@ -191,10 +172,7 @@ export class Chat extends Server<Env> {
     }));
   }
 
-  // ============================================
-  // GESTÃO DA SALA
-  // ============================================
-
+  // ========== GESTÃO DA SALA ==========
   getOrderedPlayers() {
     return [...this.players.values()].sort((a, b) => a.position - b.position);
   }
@@ -215,19 +193,15 @@ export class Chat extends Server<Env> {
     }));
   }
 
-  scheduleGameReset() {
-    if (this.resetTimer) return;
-    this.resetTimer = setTimeout(() => {
-      this.resetTimer = null;
-      // Código de reset...
-    }, 10000);
+  // ========== TWITCH INTEGRAÇÃO ==========
+  private twitchSocket: WebSocket | null = null;
+  private twitchBuffer = "";
+  private twitchReconnectTimer: any = null;
+
+  private getWorkerEnv(): any {
+    return (this as any).env;
   }
 
-  // ============================================
-  // ⭐ TWITCH INTEGRAÇÃO CORRIGIDA
-  // ============================================
-
-  // Método para iniciar OAuth
   async startTwitchOAuth() {
     const env = this.getWorkerEnv();
     if (!env?.TWITCH_CLIENT_ID) {
@@ -235,13 +209,12 @@ export class Chat extends Server<Env> {
     }
 
     const state = crypto.randomUUID();
-    
     await this.ctx.storage.put("twitch_oauth_state", {
       value: state,
       expiresAt: Date.now() + 10 * 60 * 1000
     });
 
-    const redirectUri = env.TWITCH_REDIRECT_URI || "https://durable-chat-template.marcelcantagalo.workers.dev/";
+    const redirectUri = env.TWITCH_REDIRECT_URI || "https://durable-chat-template.marcelcantagalo.workers.dev/twitch/callback";
 
     const params = new URLSearchParams({
       client_id: env.TWITCH_CLIENT_ID,
@@ -254,7 +227,6 @@ export class Chat extends Server<Env> {
     return `https://id.twitch.tv/oauth2/authorize?${params.toString()}`;
   }
 
-  // Método para completar OAuth
   async completeTwitchOAuth(code: string, state: string) {
     const env = this.getWorkerEnv();
     const savedState: any = await this.ctx.storage.get("twitch_oauth_state");
@@ -265,7 +237,7 @@ export class Chat extends Server<Env> {
 
     await this.ctx.storage.delete("twitch_oauth_state");
 
-    const redirectUri = env.TWITCH_REDIRECT_URI || "https://durable-chat-template.marcelcantagalo.workers.dev/";
+    const redirectUri = env.TWITCH_REDIRECT_URI || "https://durable-chat-template.marcelcantagalo.workers.dev/twitch/callback";
 
     const tokenResponse = await fetch("https://id.twitch.tv/oauth2/token", {
       method: "POST",
@@ -286,7 +258,6 @@ export class Chat extends Server<Env> {
 
     const tokenData: any = await tokenResponse.json();
 
-    // Valida a conta
     const userResponse = await fetch("https://api.twitch.tv/helix/users", {
       headers: {
         "Client-Id": env.TWITCH_CLIENT_ID,
@@ -294,47 +265,49 @@ export class Chat extends Server<Env> {
       }
     });
 
+    if (!userResponse.ok) {
+      throw new Error("Não foi possível validar a conta da Twitch");
+    }
+
     const userData: any = await userResponse.json();
     const twitchUser = userData.data?.[0];
 
     if (!twitchUser) {
-      throw new Error("Não foi possível validar a conta da Twitch");
+      throw new Error("Conta da Twitch não encontrada");
     }
 
-    // Salva os tokens
     await this.ctx.storage.put("twitch_access_token", tokenData.access_token);
     await this.ctx.storage.put("twitch_refresh_token", tokenData.refresh_token || null);
     await this.ctx.storage.put("twitch_bot_login", twitchUser.login);
     await this.ctx.storage.put("twitch_enabled", true);
 
-    // Conecta ao chat
     await this.connectTwitchChat();
-    
     return true;
   }
 
-  // Conectar ao chat da Twitch
   private async connectTwitchChat() {
-    if (this.twitchSocket) return;
+    if (this.twitchSocket) {
+      console.log("🟣 Twitch chat já está conectado");
+      return;
+    }
 
     const enabled = await this.ctx.storage.get("twitch_enabled");
     const token: any = await this.ctx.storage.get("twitch_access_token");
     const login: any = await this.ctx.storage.get("twitch_bot_login");
 
     if (!enabled || !token || !login) {
-      console.log("⚠️ Twitch não está habilitado");
+      console.log("⚠️ Twitch não está habilitado ou faltam credenciais");
       return;
     }
 
     try {
-      console.log("🟣 Conectando ao Twitch...");
-      
+      console.log("🟣 Conectando ao Twitch chat...");
       const socket = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
       this.twitchSocket = socket;
       this.twitchBuffer = "";
 
       socket.addEventListener("open", () => {
-        console.log("🟣 WebSocket Twitch conectado");
+        console.log("🟣 WebSocket Twitch aberto");
         socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
         socket.send(`PASS oauth:${token}\r\n`);
         socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
@@ -366,13 +339,13 @@ export class Chat extends Server<Env> {
 
   private scheduleTwitchReconnect() {
     if (this.twitchReconnectTimer) return;
+    console.log("🔄 Agendando reconexão Twitch em 10 segundos...");
     this.twitchReconnectTimer = setTimeout(() => {
       this.twitchReconnectTimer = null;
       this.connectTwitchChat();
     }, 10000);
   }
 
-  // Processa mensagens do IRC
   private handleTwitchMessage(rawData: string) {
     this.twitchBuffer += rawData;
     const lines = this.twitchBuffer.split("\r\n");
@@ -418,13 +391,11 @@ export class Chat extends Server<Env> {
     }
   }
 
-  // Adiciona jogador da Twitch
   async addTwitchPlayer(twitchUserId: string, twitchName: string) {
     if (!twitchUserId) {
       return { ok: false, reason: "missing-user-id" };
     }
 
-    // Verifica se já existe
     const existing = [...this.players.values()].find(
       player => player.twitchUserId === twitchUserId
     );
@@ -442,7 +413,6 @@ export class Chat extends Server<Env> {
     const cleanName = String(twitchName || "Player").trim().slice(0, 8) || "Player";
     const playerId = `TWITCH-${twitchUserId}`;
 
-    // Posição do jogador
     const humanPositions = [...this.players.values()]
       .filter(player => !player.isAI)
       .map(player => Number(player.position))
@@ -470,7 +440,6 @@ export class Chat extends Server<Env> {
 
     this.players.set(playerId, player);
 
-    // Notifica todos
     this.broadcast(JSON.stringify({
       type: "playerJoined",
       player
@@ -479,19 +448,15 @@ export class Chat extends Server<Env> {
     this.broadcastRoomState();
 
     console.log(`📺 TWITCH !PLAY: ${cleanName} (${playerClass})`);
-    
     return { ok: true, player };
   }
 
-  // ============================================
-  // CICLO DE VIDA DO SERVIDOR
-  // ============================================
-
+  // ========== CICLO DE VIDA ==========
   onStart() {
     console.log("🔥 BOSS FIGHT SERVER STARTED");
     this.ensureAI();
     this.scheduleAIAttack();
-    this.connectTwitchChat(); // <-- CONECTA AO TWITCH AUTOMATICAMENTE
+    this.connectTwitchChat();
   }
 
   onConnect(connection: Connection) {
@@ -504,8 +469,8 @@ export class Chat extends Server<Env> {
     try {
       const data: any = JSON.parse(message as string);
 
-      // ... (mantenha o resto do seu código onMessage igual)
-      // O código onMessage está muito grande, mas mantenha ele como estava
+      // ... (mantenha todo o seu código onMessage aqui - é muito grande para repetir)
+      // Mas certifique-se de que ele está completo
       
     } catch (error) {
       console.error("❌ MESSAGE ERROR:", error);
@@ -524,10 +489,6 @@ export class Chat extends Server<Env> {
     }
   }
 }
-
-// ============================================
-// EXPORT PRINCIPAL
-// ============================================
 
 export default {
   async fetch(request: Request, env: any) {
@@ -579,7 +540,7 @@ export default {
     const response = await routePartykitRequest(request, { ...env });
     if (response) return response;
 
-    // Assets
+    // Assets (seu HTML)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
