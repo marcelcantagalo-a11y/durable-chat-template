@@ -10,6 +10,110 @@ export class Chat extends Server<Env> {
   players = new Map<string, any>();
   gameState: any = null;
   lastSkillClass = null;
+  botTimer: any = null;
+
+  ensureAI() {
+    const aiId = "AI-1";
+
+    for(const [id, player] of this.players){
+      if(player.isAI && id !== aiId){
+        this.players.delete(id);
+      }
+    }
+
+    if(!this.players.has(aiId)){
+      this.players.set(aiId, {
+        id: aiId,
+        name: "Arena AI",
+        class: "WARRIOR",
+        position: 0,
+        level: 1,
+        xp: 0,
+        maxHp: 150,
+        hp: 150,
+        totalDamage: 0,
+        healing: 0,
+        alive: true,
+        taunt: false,
+        isAI: true
+      });
+    }
+  }
+
+  aiAttack() {
+    if(!this.gameState || this.gameState.bossHp <= 0){
+      return;
+    }
+
+    const humanPlayers = [
+      ...this.players.values()
+    ].filter(
+      player => !player.isAI && player.alive
+    );
+
+    if(humanPlayers.length === 0){
+      return;
+    }
+
+    this.ensureAI();
+
+    const ai = this.players.get("AI-1");
+
+    if(!ai){
+      return;
+    }
+
+    if(!ai.alive){
+      ai.hp = ai.maxHp;
+      ai.alive = true;
+    }
+
+    let damage =
+      Math.floor(
+        Math.random() * (80 - 50 + 1)
+      ) + 50;
+
+    const critical =
+      Math.random() < 0.11;
+
+    if(critical){
+      damage *= 2;
+    }
+
+    damage =
+      Math.min(
+        damage,
+        this.gameState.bossHp
+      );
+
+    this.gameState.bossHp -=
+      damage;
+
+    ai.totalDamage +=
+      damage;
+
+    this.players.set(
+      "AI-1",
+      ai
+    );
+
+    this.broadcast(
+      JSON.stringify({
+        type: "attackResult",
+        playerId: "AI-1",
+        name: ai.name,
+        class: ai.class,
+        hit: true,
+        damage: damage,
+        critical: critical,
+        bossHp: this.gameState.bossHp,
+        maxBossHp: this.gameState.maxBossHp,
+        totalDamage: ai.totalDamage,
+        level: ai.level,
+        isAI: true
+      })
+    );
+  }
 
   getOrderedPlayers() {
     return [
@@ -43,9 +147,18 @@ export class Chat extends Server<Env> {
     console.log(
       "🔥 BOSS FIGHT SERVER STARTED"
     );
+
+    this.ensureAI();
+
+    this.botTimer =
+      setInterval(() => {
+        this.aiAttack();
+      }, 3500);
   }
 
   onConnect(connection: Connection) {
+    this.ensureAI();
+
     console.log(
       "🟢 PLAYER CONNECTED:",
       connection.id
@@ -104,6 +217,8 @@ export class Chat extends Server<Env> {
 
             }
 
+
+            this.ensureAI();
 
             this.broadcastRoomState();
 
@@ -1563,6 +1678,94 @@ export class Chat extends Server<Env> {
 
             this.broadcastRoomState();
 
+
+            return;
+
+        }
+
+
+
+        /* =====================================
+           🔄 RESET BATTLE + KEEP ONE AI
+        ===================================== */
+
+        if(data.type === "resetGame"){
+
+            for(const [id, player] of this.players){
+
+                if(!player.isAI){
+                    this.players.delete(id);
+                }
+
+            }
+
+            this.ensureAI();
+
+            const resetBoss =
+                data.gameState?.currentBoss ||
+                this.gameState?.currentBoss;
+
+            const resetLevel =
+                Number(data.gameState?.bossLevel) || 1;
+
+            const resetMaxHp =
+                Number(data.gameState?.maxBossHp) ||
+                Number(resetBoss?.hp) ||
+                10000;
+
+            this.gameState = {
+
+                bossLevel:
+                    resetLevel,
+
+                currentBoss:
+                    resetBoss,
+
+                maxBossHp:
+                    resetMaxHp,
+
+                bossHp:
+                    resetMaxHp,
+
+                wins:
+                    0,
+
+                nextBossAttackAt:
+                    0
+
+            };
+
+            const ai =
+                this.players.get("AI-1");
+
+            if(ai){
+
+                ai.position = 0;
+                ai.hp = ai.maxHp;
+                ai.alive = true;
+                ai.taunt = false;
+                ai.totalDamage = 0;
+                ai.healing = 0;
+
+            }
+
+            this.broadcast(
+                JSON.stringify({
+
+                    type:
+                        "roomState",
+
+                    reset:
+                        true,
+
+                    players:
+                        this.getOrderedPlayers(),
+
+                    gameState:
+                        this.gameState
+
+                })
+            );
 
             return;
 
