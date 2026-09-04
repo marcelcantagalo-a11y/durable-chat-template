@@ -8,7 +8,16 @@
 		"isolatedModules": true,
 		"forceConsistentCasingInFileNames": true,
 		"skipLibCheck": true,
-		"strict": true
+		"strict": true,
+		"types": ["@cloudflare/workers-types"]
 	},
-	"include": ["src/shared.ts"]
+	"include": [
+		"src/**/*.ts",
+		"src/**/*.tsx"
+	],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"public"
+	]
 }
