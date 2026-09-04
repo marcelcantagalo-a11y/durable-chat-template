@@ -278,6 +278,29 @@ export class Chat extends Server<Env> {
     return (this as any).env;
   }
 
+  // ========== NOVO MÉTODO PARA RESETAR TOKENS ==========
+  async resetTwitchAuth() {
+    console.log("🧹 RESETANDO AUTENTICAÇÃO TWITCH...");
+    try {
+      await this.ctx.storage.delete("twitch_access_token");
+      await this.ctx.storage.delete("twitch_refresh_token");
+      await this.ctx.storage.delete("twitch_enabled");
+      await this.ctx.storage.delete("twitch_bot_login");
+      await this.ctx.storage.delete("twitch_oauth_state");
+      
+      if (this.twitchSocket) {
+        try { this.twitchSocket.close(); } catch {}
+        this.twitchSocket = null;
+      }
+      
+      console.log("✅ AUTENTICAÇÃO TWITCH RESETADA!");
+      return { success: true };
+    } catch (error) {
+      console.error("❌ ERRO AO RESETAR:", error);
+      return { success: false, error: String(error) };
+    }
+  }
+
   async startTwitchOAuth() {
     const env = this.getWorkerEnv();
     if (!env?.TWITCH_CLIENT_ID) {
@@ -880,6 +903,28 @@ export default {
   async fetch(request: Request, env: any) {
     const url = new URL(request.url);
 
+    // ========== NOVA ROTA PARA RESETAR TOKENS ==========
+    if (url.pathname === "/twitch/reset") {
+      try {
+        const id = env.Chat.idFromName("bossfight");
+        const stub = env.Chat.get(id);
+        const result = await stub.resetTwitchAuth();
+        return new Response(
+          JSON.stringify(result),
+          { 
+            status: result.success ? 200 : 500,
+            headers: { "Content-Type": "application/json" }
+          }
+        );
+      } catch (error) {
+        console.error("❌ RESET ERROR:", error);
+        return new Response(
+          JSON.stringify({ success: false, error: String(error) }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     if (url.pathname === "/twitch/login") {
       try {
         const id = env.Chat.idFromName("bossfight");
@@ -906,27 +951,4 @@ export default {
       try {
         const id = env.Chat.idFromName("bossfight");
         const stub = env.Chat.get(id);
-        await stub.completeTwitchOAuth(code, state);
-        return new Response(
-          "✅ Twitch conectado com sucesso! Use !play no chat.",
-          { headers: { "Content-Type": "text/plain; charset=utf-8" } }
-        );
-      } catch (error) {
-        console.error("❌ TWITCH CALLBACK ERROR:", error);
-        return new Response(
-          `Erro: ${error instanceof Error ? error.message : String(error)}`,
-          { status: 500 }
-        );
-      }
-    }
-
-    const response = await routePartykitRequest(request, { ...env });
-    if (response) return response;
-
-    if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
-    }
-
-    return new Response("Not found", { status: 404 });
-  }
-};
+        await stub.complete
