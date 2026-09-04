@@ -13,6 +13,9 @@ export class Chat extends Server<Env> {
   botTimer: any = null;
   resetTimer: any = null;
 
+  // Timers individuais dos jogadores que entram pela Twitch.
+  twitchPlayerTimers = new Map<string, any>();
+
   getClassStats(className: string) {
     const stats: Record<string, any> = {
       TANK: {
@@ -134,6 +137,10 @@ export class Chat extends Server<Env> {
     this.players.set(aiId, ai);
   }
 
+  // ============================================================
+  // TIMER DA IA OFICIAL
+  // ============================================================
+
   scheduleAIAttack(delay?: number) {
     if (this.botTimer) {
       clearTimeout(this.botTimer);
@@ -163,67 +170,574 @@ export class Chat extends Server<Env> {
     }, wait);
   }
 
-  aiAttack() {
-    if (!this.gameState || this.gameState.bossHp <= 0) {
+  // ============================================================
+  // TIMER DOS JOGADORES TWITCH
+  // ============================================================
+
+  scheduleTwitchPlayerAction(
+    playerId: string,
+    delay?: number
+  ) {
+
+    const existing =
+      this.twitchPlayerTimers.get(
+        playerId
+      );
+
+    if (existing) {
+      clearTimeout(existing);
+      this.twitchPlayerTimers.delete(
+        playerId
+      );
+    }
+
+    const player =
+      this.players.get(
+        playerId
+      );
+
+    if (
+      !player ||
+      player.isTwitch !== true
+    ) {
       return;
     }
 
-    this.ensureAI();
+    const stats =
+      this.getClassStats(
+        player.class
+      );
 
-    const ai = this.players.get("AI-1");
+    const wait =
+      typeof delay === "number"
+        ? delay
+        : stats.speed;
 
-    if (!ai) {
+    const timer =
+      setTimeout(() => {
+
+        this.twitchPlayerTimers.delete(
+          playerId
+        );
+
+        this.twitchPlayerAction(
+          playerId
+        );
+
+        const currentPlayer =
+          this.players.get(
+            playerId
+          );
+
+        if (
+          currentPlayer &&
+          currentPlayer.isTwitch === true
+        ) {
+          this.scheduleTwitchPlayerAction(
+            playerId
+          );
+        }
+
+      }, wait);
+
+    this.twitchPlayerTimers.set(
+      playerId,
+      timer
+    );
+  }
+
+  // ============================================================
+  // AÇÃO AUTOMÁTICA DO JOGADOR TWITCH
+  // ============================================================
+
+  twitchPlayerAction(
+    playerId: string
+  ) {
+
+    if (
+      !this.gameState ||
+      this.gameState.bossHp <= 0
+    ) {
       return;
     }
 
-    if (!ai.alive || Number(ai.hp) <= 0) {
+    const player =
+      this.players.get(
+        playerId
+      );
+
+    if (
+      !player ||
+      player.isTwitch !== true
+    ) {
       return;
     }
 
-    const stats = this.getClassStats(ai.class);
+    if (
+      player.alive !== true ||
+      Number(player.hp) <= 0
+    ) {
+      return;
+    }
+
+    const stats =
+      this.getClassStats(
+        player.class
+      );
 
     // ============================================================
     // PRIEST
     // ============================================================
 
-    if (ai.class === "PRIEST") {
+    if (
+      player.class === "PRIEST"
+    ) {
 
-      const damagedHumans = [
-        ...this.players.values()
-      ]
-        .filter(
-          player =>
-            player.isAI !== true &&
-            player.alive === true &&
-            Number(player.hp) > 0 &&
-            Number(player.maxHp) > 0 &&
-            Number(player.hp) < Number(player.maxHp)
-        )
-        .sort(
-          (a, b) => {
+      const damagedPlayers =
+        [
+          ...this.players.values()
+        ]
+          .filter(
+            target =>
+              target.alive === true &&
+              Number(target.hp) > 0 &&
+              Number(target.maxHp) > 0 &&
+              Number(target.hp) <
+                Number(target.maxHp)
+          )
+          .sort(
+            (a, b) => {
 
-            const ratioA =
-              Number(a.hp) /
-              Math.max(
-                1,
-                Number(a.maxHp)
-              );
+              const ratioA =
+                Number(a.hp) /
+                Math.max(
+                  1,
+                  Number(a.maxHp)
+                );
 
-            const ratioB =
-              Number(b.hp) /
-              Math.max(
-                1,
-                Number(b.maxHp)
-              );
+              const ratioB =
+                Number(b.hp) /
+                Math.max(
+                  1,
+                  Number(b.maxHp)
+                );
 
-            return ratioA - ratioB;
-          }
-        );
+              return ratioA - ratioB;
+            }
+          );
 
       let target: any = null;
 
-      if (damagedHumans.length > 0) {
-        target = damagedHumans[0];
+      if (
+        damagedPlayers.length > 0
+      ) {
+        target =
+          damagedPlayers[0];
+      }
+
+      if (!target) {
+        return;
+      }
+
+      let heal =
+        Math.floor(
+          Math.random() * 16
+        ) + 15;
+
+      heal +=
+        Number(player.level || 1) * 2;
+
+      const healingPower =
+        typeof player.healingPower === "number"
+          ? player.healingPower
+          : 1;
+
+      heal =
+        Math.floor(
+          heal * healingPower
+        );
+
+      const currentHp =
+        Number(target.hp);
+
+      const maxHp =
+        Number(target.maxHp);
+
+      const missingHp =
+        Math.max(
+          0,
+          maxHp - currentHp
+        );
+
+      heal =
+        Math.min(
+          heal,
+          missingHp
+        );
+
+      if (heal <= 0) {
+        return;
+      }
+
+      const newHp =
+        Math.min(
+          maxHp,
+          currentHp + heal
+        );
+
+      target.hp =
+        newHp;
+
+      target.maxHp =
+        maxHp;
+
+      target.alive =
+        newHp > 0;
+
+      player.healing =
+        Number(player.healing || 0) +
+        heal;
+
+      this.players.set(
+        target.id,
+        target
+      );
+
+      this.players.set(
+        player.id,
+        player
+      );
+
+      this.broadcast(
+        JSON.stringify({
+          type: "playerUpdated",
+          player: {
+            ...target
+          }
+        })
+      );
+
+      this.broadcast(
+        JSON.stringify({
+          type: "healResult",
+
+          healerId:
+            player.id,
+
+          healerName:
+            player.name,
+
+          healerClass:
+            player.class,
+
+          targetId:
+            target.id,
+
+          targetName:
+            target.name,
+
+          heal:
+            heal,
+
+          hp:
+            target.hp,
+
+          maxHp:
+            target.maxHp,
+
+          alive:
+            target.alive,
+
+          healerHealing:
+            player.healing,
+
+          isAI:
+            false
+        })
+      );
+
+      this.broadcastRoomState();
+
+      console.log(
+        "✝️ TWITCH PRIEST HEAL:",
+        player.name,
+        "->",
+        target.name,
+        "+",
+        heal,
+        "HP"
+      );
+
+      return;
+    }
+
+    // ============================================================
+    // CLASSES QUE ATACAM
+    // ============================================================
+
+    if (
+      player.class !== "TANK" &&
+      player.class !== "WARRIOR" &&
+      player.class !== "ARCHER" &&
+      player.class !== "MAGE"
+    ) {
+      return;
+    }
+
+    // ============================================================
+    // ACCURACY
+    // ============================================================
+
+    if (
+      Math.random() >
+      stats.accuracy
+    ) {
+
+      this.broadcast(
+        JSON.stringify({
+          type: "attackResult",
+
+          playerId:
+            player.id,
+
+          name:
+            player.name,
+
+          class:
+            player.class,
+
+          hit:
+            false,
+
+          damage:
+            0,
+
+          critical:
+            false,
+
+          bossHp:
+            this.gameState.bossHp,
+
+          maxBossHp:
+            this.gameState.maxBossHp,
+
+          totalDamage:
+            player.totalDamage,
+
+          level:
+            player.level,
+
+          isTwitch:
+            true
+        })
+      );
+
+      console.log(
+        "❌ TWITCH MISS:",
+        player.name,
+        player.class
+      );
+
+      return;
+    }
+
+    // ============================================================
+    // DAMAGE
+    // ============================================================
+
+    let damage =
+      Math.floor(
+        Math.random() *
+        (
+          stats.maxDamage -
+          stats.minDamage +
+          1
+        )
+      ) +
+      stats.minDamage;
+
+    damage =
+      Math.floor(
+        damage *
+        (
+          1 +
+          (
+            Number(player.level || 1) -
+            1
+          ) * 0.08
+        )
+      );
+
+    // ============================================================
+    // CRITICAL
+    // ============================================================
+
+    const critical =
+      Math.random() < 0.11;
+
+    if (critical) {
+      damage *= 2;
+    }
+
+    damage =
+      Math.min(
+        damage,
+        this.gameState.bossHp
+      );
+
+    // ============================================================
+    // APLICA DANO
+    // ============================================================
+
+    this.gameState.bossHp -=
+      damage;
+
+    player.totalDamage =
+      Number(player.totalDamage || 0) +
+      damage;
+
+    this.players.set(
+      player.id,
+      player
+    );
+
+    this.broadcast(
+      JSON.stringify({
+        type: "attackResult",
+
+        playerId:
+          player.id,
+
+        name:
+          player.name,
+
+        class:
+          player.class,
+
+        hit:
+          true,
+
+        damage:
+          damage,
+
+        critical:
+          critical,
+
+        bossHp:
+          this.gameState.bossHp,
+
+        maxBossHp:
+          this.gameState.maxBossHp,
+
+        totalDamage:
+          player.totalDamage,
+
+        level:
+          player.level,
+
+        isTwitch:
+          true
+      })
+    );
+
+    console.log(
+      "📺 TWITCH ATTACK:",
+      player.name,
+      "| CLASS:",
+      player.class,
+      "| SPEED:",
+      stats.speed,
+      "ms | DAMAGE:",
+      damage,
+      critical ? "| CRITICAL" : ""
+    );
+  }
+
+  // ============================================================
+  // ATAQUE DA IA OFICIAL
+  // ============================================================
+
+  aiAttack() {
+
+    if (
+      !this.gameState ||
+      this.gameState.bossHp <= 0
+    ) {
+      return;
+    }
+
+    this.ensureAI();
+
+    const ai =
+      this.players.get(
+        "AI-1"
+      );
+
+    if (!ai) {
+      return;
+    }
+
+    if (
+      !ai.alive ||
+      Number(ai.hp) <= 0
+    ) {
+      return;
+    }
+
+    const stats =
+      this.getClassStats(
+        ai.class
+      );
+
+    // ============================================================
+    // PRIEST
+    // ============================================================
+
+    if (
+      ai.class === "PRIEST"
+    ) {
+
+      const damagedHumans =
+        [
+          ...this.players.values()
+        ]
+          .filter(
+            player =>
+              player.isAI !== true &&
+              player.alive === true &&
+              Number(player.hp) > 0 &&
+              Number(player.maxHp) > 0 &&
+              Number(player.hp) <
+                Number(player.maxHp)
+          )
+          .sort(
+            (a, b) => {
+
+              const ratioA =
+                Number(a.hp) /
+                Math.max(
+                  1,
+                  Number(a.maxHp)
+                );
+
+              const ratioB =
+                Number(b.hp) /
+                Math.max(
+                  1,
+                  Number(b.maxHp)
+                );
+
+              return ratioA - ratioB;
+            }
+          );
+
+      let target: any = null;
+
+      if (
+        damagedHumans.length > 0
+      ) {
+        target =
+          damagedHumans[0];
       }
 
       if (
@@ -231,7 +745,8 @@ export class Chat extends Server<Env> {
         ai.alive === true &&
         Number(ai.hp) > 0 &&
         Number(ai.maxHp) > 0 &&
-        Number(ai.hp) < Number(ai.maxHp)
+        Number(ai.hp) <
+          Number(ai.maxHp)
       ) {
         target = ai;
       }
@@ -286,9 +801,14 @@ export class Chat extends Server<Env> {
           currentHp + heal
         );
 
-      target.hp = newHp;
-      target.maxHp = maxHp;
-      target.alive = newHp > 0;
+      target.hp =
+        newHp;
+
+      target.maxHp =
+        maxHp;
+
+      target.alive =
+        newHp > 0;
 
       ai.healing =
         Number(ai.healing || 0) +
@@ -361,18 +881,14 @@ export class Chat extends Server<Env> {
         target.name,
         "+",
         heal,
-        "HP |",
-        "HP:",
-        target.hp,
-        "/",
-        target.maxHp
+        "HP"
       );
 
       return;
     }
 
     // ============================================================
-    // MAGE / TANK / WARRIOR / ARCHER
+    // CLASSES QUE ATACAM
     // ============================================================
 
     if (
@@ -388,22 +904,47 @@ export class Chat extends Server<Env> {
     // ACCURACY
     // ============================================================
 
-    if (Math.random() > stats.accuracy) {
+    if (
+      Math.random() >
+      stats.accuracy
+    ) {
 
       this.broadcast(
         JSON.stringify({
           type: "attackResult",
-          playerId: ai.id,
-          name: ai.name,
-          class: ai.class,
-          hit: false,
-          damage: 0,
-          critical: false,
-          bossHp: this.gameState.bossHp,
-          maxBossHp: this.gameState.maxBossHp,
-          totalDamage: ai.totalDamage,
-          level: ai.level,
-          isAI: true
+
+          playerId:
+            ai.id,
+
+          name:
+            ai.name,
+
+          class:
+            ai.class,
+
+          hit:
+            false,
+
+          damage:
+            0,
+
+          critical:
+            false,
+
+          bossHp:
+            this.gameState.bossHp,
+
+          maxBossHp:
+            this.gameState.maxBossHp,
+
+          totalDamage:
+            ai.totalDamage,
+
+          level:
+            ai.level,
+
+          isAI:
+            true
         })
       );
 
@@ -436,13 +977,12 @@ export class Chat extends Server<Env> {
         damage *
         (
           1 +
-          (Number(ai.level || 1) - 1) * 0.08
+          (
+            Number(ai.level || 1) -
+            1
+          ) * 0.08
         )
       );
-
-    // ============================================================
-    // CRITICAL
-    // ============================================================
 
     const critical =
       Math.random() < 0.11;
@@ -456,10 +996,6 @@ export class Chat extends Server<Env> {
         damage,
         this.gameState.bossHp
       );
-
-    // ============================================================
-    // BOSS DAMAGE
-    // ============================================================
 
     this.gameState.bossHp -=
       damage;
@@ -521,7 +1057,7 @@ export class Chat extends Server<Env> {
       stats.speed,
       "ms | DAMAGE:",
       damage,
-      critical ? "CRITICAL" : ""
+      critical ? "| CRITICAL" : ""
     );
   }
 
@@ -558,7 +1094,41 @@ export class Chat extends Server<Env> {
     );
   }
 
+  // ============================================================
+  // LIMPA TIMERS TWITCH
+  // ============================================================
+
+  clearTwitchPlayerTimers() {
+
+    for (
+      const timer
+      of this.twitchPlayerTimers.values()
+    ) {
+      clearTimeout(timer);
+    }
+
+    this.twitchPlayerTimers.clear();
+  }
+
+  scheduleAllTwitchPlayers() {
+
+    for (
+      const player
+      of this.players.values()
+    ) {
+
+      if (
+        player.isTwitch === true
+      ) {
+        this.scheduleTwitchPlayerAction(
+          player.id
+        );
+      }
+    }
+  }
+
   scheduleGameReset() {
+
     if (this.resetTimer) {
       return;
     }
@@ -569,7 +1139,10 @@ export class Chat extends Server<Env> {
 
       this.ensureAI();
 
-      for (const [id, player] of this.players) {
+      for (
+        const [id, player]
+        of this.players
+      ) {
 
         if (player.isAI) {
           continue;
@@ -611,7 +1184,9 @@ export class Chat extends Server<Env> {
       }
 
       const ai =
-        this.players.get("AI-1");
+        this.players.get(
+          "AI-1"
+        );
 
       if (ai) {
 
@@ -669,7 +1244,11 @@ export class Chat extends Server<Env> {
         this.botTimer = null;
       }
 
+      this.clearTwitchPlayerTimers();
+
       this.scheduleAIAttack();
+
+      this.scheduleAllTwitchPlayers();
 
       this.broadcast(
         JSON.stringify({
@@ -985,19 +1564,25 @@ export class Chat extends Server<Env> {
         : 0;
 
     const player = {
-      id: playerId,
+
+      id:
+        playerId,
 
       twitchUserId,
 
-      name: cleanName,
+      name:
+        cleanName,
 
-      class: playerClass,
+      class:
+        playerClass,
 
       position,
 
-      level: 1,
+      level:
+        1,
 
-      xp: 0,
+      xp:
+        0,
 
       maxHp:
         stats.maxHp,
@@ -1005,17 +1590,23 @@ export class Chat extends Server<Env> {
       hp:
         stats.maxHp,
 
-      totalDamage: 0,
+      totalDamage:
+        0,
 
-      healing: 0,
+      healing:
+        0,
 
-      alive: true,
+      alive:
+        true,
 
-      taunt: false,
+      taunt:
+        false,
 
-      isAI: false,
+      isAI:
+        false,
 
-      isTwitch: true
+      isTwitch:
+        true
     };
 
     this.players.set(
@@ -1025,17 +1616,27 @@ export class Chat extends Server<Env> {
 
     this.broadcast(
       JSON.stringify({
-        type: "playerJoined",
+        type:
+          "playerJoined",
         player
       })
     );
 
     this.broadcastRoomState();
 
+    // Começa o combate automático
+    // imediatamente após o primeiro intervalo da classe.
+    this.scheduleTwitchPlayerAction(
+      playerId
+    );
+
     console.log(
       "📺 TWITCH !PLAY:",
       cleanName,
-      playerClass
+      playerClass,
+      "| SPEED:",
+      stats.speed,
+      "ms"
     );
 
     return {
@@ -1303,6 +1904,8 @@ export class Chat extends Server<Env> {
     }
 
     this.scheduleAIAttack();
+
+    this.scheduleAllTwitchPlayers();
 
     this.startTwitchChat();
   }
@@ -1630,11 +2233,14 @@ export class Chat extends Server<Env> {
               name:
                 player.name,
 
-              hit: false,
+              hit:
+                false,
 
-              damage: 0,
+              damage:
+                0,
 
-              critical: false,
+              critical:
+                false,
 
               bossHp:
                 this.gameState.bossHp,
@@ -1739,7 +2345,8 @@ export class Chat extends Server<Env> {
             class:
               player.class,
 
-            hit: true,
+            hit:
+              true,
 
             damage:
               damage,
@@ -2454,7 +3061,11 @@ export class Chat extends Server<Env> {
           this.botTimer = null;
         }
 
+        this.clearTwitchPlayerTimers();
+
         this.scheduleAIAttack();
+
+        this.scheduleAllTwitchPlayers();
 
         this.broadcast(
           JSON.stringify({
