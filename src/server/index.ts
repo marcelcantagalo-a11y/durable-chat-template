@@ -52,28 +52,28 @@ if(data.type === "resetGame"){
     // RESETA A IA COM UMA NOVA CLASSE ALEATÓRIA
     // ============================================================
 
-    const ai = this.players.get("AI-1");
+const ai = this.players.get("AI-1");
 
-    if(ai){
-        const newClass = this.getRandomAIClass();
-        const stats = this.getClassStats(newClass);
+if(ai){
+    const newClass = "TANK";
+    const stats = this.getClassStats(newClass);
 
-        ai.id = "AI-1";
-        ai.name = "Arena AI";
-        ai.position = 0;
-        ai.class = newClass;
-        ai.maxHp = stats.maxHp;
-        ai.hp = stats.maxHp;
-        ai.alive = true;
-        ai.taunt = false;
-        ai.totalDamage = 0;
-        ai.healing = 0;
-        ai.level = 1;
-        ai.xp = 0;
-        ai.isAI = true;
+    ai.id = "AI-1";
+    ai.name = "Arena AI";
+    ai.position = 0;
+    ai.class = newClass;
+    ai.maxHp = stats.maxHp;
+    ai.hp = stats.maxHp;
+    ai.alive = true;
+    ai.taunt = false;
+    ai.totalDamage = 0;
+    ai.healing = 0;
+    ai.level = 1;
+    ai.xp = 0;
+    ai.isAI = true;
 
-        this.players.set("AI-1", ai);
-    }
+    this.players.set("AI-1", ai);
+}
 
     // ============================================================
     // REINICIA O TIMER DA IA
