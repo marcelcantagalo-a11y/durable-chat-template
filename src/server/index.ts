@@ -473,7 +473,6 @@ export class Chat extends Server<Env> {
         continue;
       }
 
-      // Verifica se é uma mensagem PRIVMSG
       if (line.includes(" PRIVMSG #bossfightlivearena :")) {
         const commandIndex = line.indexOf(" PRIVMSG #bossfightlivearena :");
         const messageText = line.slice(commandIndex + " PRIVMSG #bossfightlivearena :".length).trim();
@@ -501,7 +500,6 @@ export class Chat extends Server<Env> {
         }
       }
       
-      // Log para ver se o bot entrou no canal
       if (line.includes(" 366 ")) {
         console.log("✅ Bot entrou no canal #bossfightlivearena!");
       }
@@ -914,6 +912,7 @@ export default {
   async fetch(request: Request, env: any) {
     const url = new URL(request.url);
 
+    // PRIMEIRO: Rotas do Twitch (MAIS ESPECÍFICAS)
     if (url.pathname === "/twitch/reset") {
       try {
         const id = env.Chat.idFromName("bossfight");
@@ -975,6 +974,7 @@ export default {
       }
     }
 
+    // DEPOIS: PartyKit e Assets (MENOS ESPECÍFICOS)
     const response = await routePartykitRequest(request, { ...env });
     if (response) return response;
 
