@@ -13,383 +13,6 @@ export class Chat extends Server<Env> {
   botTimer: any = null;
   resetTimer: any = null;
 
-  static readonly TWITCH_CHANNEL = "bossfightlivearena";
-  static readonly TWITCH_REDIRECT_PATH = "/";
-  static readonly TWITCH_EVENTSUB_PATH = "/twitch/eventsub";
-
-  getTwitchEventSubSecret() {
-    // Usa o Client Secret como segredo do webhook para não exigir uma
-    // terceira variável no Cloudflare. O Client Secret deve permanecer secreto.
-    return this.env.TWITCH_CLIENT_SECRET;
-  }
-
-  async addTwitchPlayer(viewerName: string, twitchUserId: string) {
-    const normalizedId = String(twitchUserId || "").trim();
-    if(!normalizedId){
-      return { ok: false, reason: "missing_user_id" };
-    }
-
-    // Não deixa o mesmo viewer entrar duas vezes.
-    const existing = [...this.players.values()].find(
-      player => player.twitchUserId === normalizedId
-    );
-
-    if(existing){
-      return { ok: false, reason: "already_in_game", player: existing };
-    }
-
-    // Máximo de 8 caracteres, conforme definido para o jogo.
-    const cleanName = String(viewerName || "Player")
-      .trim()
-      .slice(0, 8) || "Player";
-
-    const classes = [
-      "TANK",
-      "WARRIOR",
-      "ARCHER",
-      "MAGE",
-      "PRIEST"
-    ];
-
-    // Máximo de 29 jogadores humanos na arena (1 IA + 29 humanos = 30 total).
-    const humanPlayers = [...this.players.values()].filter(
-      player => !player.isAI
-    );
-
-    if(humanPlayers.length >= 29){
-      return { ok: false, reason: "game_full" };
-    }
-
-    const playerClass =
-      classes[Math.floor(Math.random() * classes.length)];
-
-    const stats = this.getClassStats(playerClass);
-
-    const player = {
-      id: `twitch-${normalizedId}`,
-      name: cleanName,
-      class: playerClass,
-      position: this.players.size,
-      level: 1,
-      xp: 0,
-      maxHp: stats.maxHp,
-      hp: stats.maxHp,
-      totalDamage: 0,
-      healing: 0,
-      alive: true,
-      taunt: false,
-      isAI: false,
-      twitchUserId: normalizedId,
-      twitchUserName: viewerName
-    };
-
-    this.players.set(player.id, player);
-
-    this.broadcast(
-      JSON.stringify({
-        type: "playerJoined",
-        player: player
-      })
-    );
-
-    this.broadcastRoomState();
-
-    console.log(
-      "🟣 TWITCH !PLAY:",
-      cleanName,
-      playerClass,
-      normalizedId
-    );
-
-    return { ok: true, player };
-  }
-
-  async handleTwitchChatMessage(event: any, messageId: string) {
-    if(!event){
-      return { ok: false, reason: "missing_event" };
-    }
-
-    // Twitch pode reenviar notificações; guarda o ID processado no SQLite
-    // do Durable Object para evitar duas entradas pelo mesmo !play.
-    if(messageId){
-      const key = `twitch:event:${messageId}`;
-      const alreadyProcessed = await this.ctx.storage.get<boolean>(key);
-
-      if(alreadyProcessed){
-        return { ok: true, reason: "duplicate_event" };
-      }
-
-      await this.ctx.storage.put(key, true);
-    }
-
-    const text = String(event.message?.text || "")
-      .trim()
-      .toLowerCase();
-
-    if(text !== "!play"){
-      return { ok: true, reason: "not_play" };
-    }
-
-    const broadcasterLogin = String(
-      event.broadcaster_user_login || ""
-    ).toLowerCase();
-
-    if(
-      broadcasterLogin &&
-      broadcasterLogin !== Chat.TWITCH_CHANNEL
-    ){
-      return { ok: false, reason: "wrong_channel" };
-    }
-
-    const viewerName =
-      event.chatter_user_name ||
-      event.chatter_user_login ||
-      "Player";
-
-    const twitchUserId =
-      event.chatter_user_id ||
-      event.chatter_user_login ||
-      viewerName;
-
-    return await this.addTwitchPlayer(
-      viewerName,
-      twitchUserId
-    );
-  }
-
-  async twitchOAuthCallback(code: string, redirectUri: string) {
-    const clientId = this.env.TWITCH_CLIENT_ID;
-    const clientSecret = this.env.TWITCH_CLIENT_SECRET;
-
-    if(!clientId || !clientSecret){
-      return {
-        ok: false,
-        error: "Twitch não configurado. Verifique TWITCH_CLIENT_ID e TWITCH_CLIENT_SECRET."
-      };
-    }
-
-    const tokenResponse = await fetch(
-      "https://id.twitch.tv/oauth2/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          code: code,
-          grant_type: "authorization_code",
-          redirect_uri: redirectUri
-        })
-      }
-    );
-
-    const tokenData: any = await tokenResponse.json();
-
-    if(!tokenResponse.ok || !tokenData.access_token){
-      console.error("❌ TWITCH TOKEN ERROR:", tokenData);
-      return {
-        ok: false,
-        error: "A Twitch recusou o código de autorização.",
-        details: tokenData
-      };
-    }
-
-    const userResponse = await fetch(
-      "https://api.twitch.tv/helix/users",
-      {
-        headers: {
-          "Authorization": `Bearer ${tokenData.access_token}`,
-          "Client-Id": clientId
-        }
-      }
-    );
-
-    const userData: any = await userResponse.json();
-    const twitchUser = userData?.data?.[0];
-
-    if(!userResponse.ok || !twitchUser){
-      console.error("❌ TWITCH USER ERROR:", userData);
-      return {
-        ok: false,
-        error: "Não foi possível identificar a conta da Twitch."
-      };
-    }
-
-    if(
-      String(twitchUser.login || "").toLowerCase() !==
-      Chat.TWITCH_CHANNEL
-    ){
-      return {
-        ok: false,
-        error: `Autorize usando a conta ${Chat.TWITCH_CHANNEL}.`
-      };
-    }
-
-    await this.ctx.storage.put(
-      "twitch:access_token",
-      tokenData.access_token
-    );
-
-    await this.ctx.storage.put(
-      "twitch:refresh_token",
-      tokenData.refresh_token || ""
-    );
-
-    await this.ctx.storage.put(
-      "twitch:user_id",
-      twitchUser.id
-    );
-
-    await this.ctx.storage.put(
-      "twitch:user_login",
-      twitchUser.login
-    );
-
-    const appTokenResponse = await fetch(
-      "https://id.twitch.tv/oauth2/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "client_credentials"
-        })
-      }
-    );
-
-    const appTokenData: any = await appTokenResponse.json();
-
-    if(!appTokenResponse.ok || !appTokenData.access_token){
-      console.error("❌ TWITCH APP TOKEN ERROR:", appTokenData);
-      return {
-        ok: false,
-        error: "Não foi possível criar o token da aplicação Twitch.",
-        details: appTokenData
-      };
-    }
-
-    const callbackUrl =
-      new URL(Chat.TWITCH_EVENTSUB_PATH, redirectUri).toString();
-
-    const subscriptionResponse = await fetch(
-      "https://api.twitch.tv/helix/eventsub/subscriptions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${appTokenData.access_token}`,
-          "Client-Id": clientId,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          type: "channel.chat.message",
-          version: "1",
-          condition: {
-            broadcaster_user_id: twitchUser.id,
-            user_id: twitchUser.id
-          },
-          transport: {
-            method: "webhook",
-            callback: callbackUrl,
-            secret: this.getTwitchEventSubSecret()
-          }
-        })
-      }
-    );
-
-    const subscriptionData: any =
-      await subscriptionResponse.json();
-
-    if(
-      !subscriptionResponse.ok &&
-      !String(subscriptionData?.message || "")
-        .toLowerCase()
-        .includes("subscription")
-    ){
-      console.error(
-        "❌ TWITCH EVENTSUB ERROR:",
-        subscriptionData
-      );
-
-      return {
-        ok: false,
-        error: "A Twitch recusou a assinatura do chat.",
-        details: subscriptionData
-      };
-    }
-
-    await this.ctx.storage.put(
-      "twitch:connected",
-      true
-    );
-
-    console.log(
-      "🟣 TWITCH CONNECTED:",
-      twitchUser.login,
-      subscriptionData
-    );
-
-    return {
-      ok: true,
-      user: twitchUser,
-      subscription: subscriptionData
-    };
-  }
-
-  async verifyTwitchEventSub(
-    messageId: string,
-    timestamp: string,
-    body: string,
-    signature: string
-  ) {
-    const secret = this.getTwitchEventSubSecret();
-
-    if(!secret){
-      return false;
-    }
-
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-
-    const signed = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      encoder.encode(messageId + timestamp + body)
-    );
-
-    const bytes = new Uint8Array(signed);
-    let hex = "";
-
-    for(const byte of bytes){
-      hex += byte.toString(16).padStart(2, "0");
-    }
-
-    const expected = `sha256=${hex}`;
-
-    if(expected.length !== signature.length){
-      return false;
-    }
-
-    let difference = 0;
-
-    for(let i = 0; i < expected.length; i++){
-      difference |=
-        expected.charCodeAt(i) ^ signature.charCodeAt(i);
-    }
-
-    return difference === 0;
-  }
-
   getClassStats(className: string) {
     const stats: Record<string, any> = {
       TANK: {
@@ -751,6 +374,296 @@ export class Chat extends Server<Env> {
     },10000);
   }
 
+
+  private twitchSocket: WebSocket | null = null;
+  private twitchBuffer = "";
+  private twitchReconnectTimer: any = null;
+
+  private getWorkerEnv(): any {
+    return (this as any).env;
+  }
+
+  async beginTwitchOAuth() {
+    const env = this.getWorkerEnv();
+    if(!env?.TWITCH_CLIENT_ID){
+      throw new Error("TWITCH_CLIENT_ID não configurado");
+    }
+
+    const state = crypto.randomUUID();
+
+    await this.ctx.storage.put("twitch_oauth_state", {
+      value: state,
+      expiresAt: Date.now() + 10 * 60 * 1000
+    });
+
+    const redirectUri = `${env.TWITCH_REDIRECT_URI || "https://durable-chat-template.marcelcantagalo.workers.dev/"}`;
+
+    const params = new URLSearchParams({
+      client_id: env.TWITCH_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "chat:read chat:edit",
+      state
+    });
+
+    return `https://id.twitch.tv/oauth2/authorize?${params.toString()}`;
+  }
+
+  async completeTwitchOAuth(code: string, state: string) {
+    const env = this.getWorkerEnv();
+    const savedState: any = await this.ctx.storage.get("twitch_oauth_state");
+
+    if(
+      !savedState ||
+      savedState.value !== state ||
+      Number(savedState.expiresAt) < Date.now()
+    ){
+      throw new Error("OAuth state inválido ou expirado");
+    }
+
+    await this.ctx.storage.delete("twitch_oauth_state");
+
+    const redirectUri = `${env.TWITCH_REDIRECT_URI || "https://durable-chat-template.marcelcantagalo.workers.dev/"}`;
+
+    const tokenResponse = await fetch(
+      "https://id.twitch.tv/oauth2/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          client_id: env.TWITCH_CLIENT_ID,
+          client_secret: env.TWITCH_CLIENT_SECRET,
+          code,
+          grant_type: "authorization_code",
+          redirect_uri: redirectUri
+        })
+      }
+    );
+
+    if(!tokenResponse.ok){
+      const text = await tokenResponse.text();
+      throw new Error(`Twitch OAuth falhou: ${text}`);
+    }
+
+    const tokenData: any = await tokenResponse.json();
+
+    const userResponse = await fetch(
+      "https://api.twitch.tv/helix/users?login=bossfightlivearena",
+      {
+        headers: {
+          "Client-Id": env.TWITCH_CLIENT_ID,
+          "Authorization": `Bearer ${tokenData.access_token}`
+        }
+      }
+    );
+
+    if(!userResponse.ok){
+      throw new Error("Não foi possível validar a conta da Twitch");
+    }
+
+    const userData: any = await userResponse.json();
+    const twitchUser = userData.data?.[0];
+
+    if(!twitchUser || twitchUser.login.toLowerCase() !== "bossfightlivearena"){
+      throw new Error("Autorize a conta da Twitch bossfightlivearena");
+    }
+
+    await this.ctx.storage.put("twitch_access_token", tokenData.access_token);
+    await this.ctx.storage.put("twitch_refresh_token", tokenData.refresh_token || null);
+    await this.ctx.storage.put("twitch_bot_login", twitchUser.login);
+    await this.ctx.storage.put("twitch_enabled", true);
+
+    await this.startTwitchChat();
+
+    return true;
+  }
+
+  async addTwitchPlayer(twitchUserId: string, twitchName: string) {
+    if(!twitchUserId){
+      return { ok:false, reason:"missing-user-id" };
+    }
+
+    const existing = [...this.players.values()].find(
+      player => player.twitchUserId === twitchUserId
+    );
+
+    if(existing){
+      return { ok:false, reason:"already-playing", player:existing };
+    }
+
+    this.ensureAI();
+
+    const validClasses = [
+      "TANK",
+      "WARRIOR",
+      "ARCHER",
+      "MAGE",
+      "PRIEST"
+    ];
+
+    const playerClass =
+      validClasses[Math.floor(Math.random() * validClasses.length)];
+
+    const stats = this.getClassStats(playerClass);
+    const cleanName = String(twitchName || "Player").trim().slice(0, 8) || "Player";
+    const playerId = `TWITCH-${twitchUserId}`;
+
+    const humanPositions = [...this.players.values()]
+      .filter(player => !player.isAI)
+      .map(player => Number(player.position))
+      .filter(position => Number.isFinite(position));
+
+    const position =
+      humanPositions.length > 0
+        ? Math.max(...humanPositions) + 1
+        : 0;
+
+    const player = {
+      id: playerId,
+      twitchUserId,
+      name: cleanName,
+      class: playerClass,
+      position,
+      level: 1,
+      xp: 0,
+      maxHp: stats.maxHp,
+      hp: stats.maxHp,
+      totalDamage: 0,
+      healing: 0,
+      alive: true,
+      taunt: false,
+      isAI: false,
+      isTwitch: true
+    };
+
+    this.players.set(playerId, player);
+
+    this.broadcast(
+      JSON.stringify({
+        type:"playerJoined",
+        player
+      })
+    );
+
+    this.broadcastRoomState();
+
+    console.log(
+      "📺 TWITCH !PLAY:",
+      cleanName,
+      playerClass
+    );
+
+    return { ok:true, player };
+  }
+
+  private async startTwitchChat() {
+    if(this.twitchSocket){
+      return;
+    }
+
+    const enabled = await this.ctx.storage.get("twitch_enabled");
+    const token: any = await this.ctx.storage.get("twitch_access_token");
+    const login: any = await this.ctx.storage.get("twitch_bot_login");
+
+    if(!enabled || !token || !login){
+      return;
+    }
+
+    try{
+      const socket = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+      this.twitchSocket = socket;
+      this.twitchBuffer = "";
+
+      socket.addEventListener("open", () => {
+        socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
+        socket.send(`PASS oauth:${token}\r\n`);
+        socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
+        socket.send("JOIN #bossfightlivearena\r\n");
+
+        console.log("🟣 TWITCH CHAT CONNECTED");
+      });
+
+      socket.addEventListener("message", (event: MessageEvent) => {
+        this.handleTwitchIRC(String(event.data));
+      });
+
+      socket.addEventListener("close", () => {
+        this.twitchSocket = null;
+        this.scheduleTwitchReconnect();
+      });
+
+      socket.addEventListener("error", () => {
+        try{ socket.close(); }catch{}
+      });
+    }catch(error){
+      this.twitchSocket = null;
+      console.error("❌ TWITCH CHAT ERROR:", error);
+      this.scheduleTwitchReconnect();
+    }
+  }
+
+  private scheduleTwitchReconnect() {
+    if(this.twitchReconnectTimer){
+      return;
+    }
+
+    this.twitchReconnectTimer = setTimeout(() => {
+      this.twitchReconnectTimer = null;
+      this.startTwitchChat();
+    }, 10000);
+  }
+
+  private handleTwitchIRC(rawData: string) {
+    this.twitchBuffer += rawData;
+
+    const lines = this.twitchBuffer.split("\r\n");
+    this.twitchBuffer = lines.pop() || "";
+
+    for(const line of lines){
+      if(line.startsWith("PING")){
+        if(this.twitchSocket){
+          this.twitchSocket.send("PONG :tmi.twitch.tv\r\n");
+        }
+        continue;
+      }
+
+      if(!line.includes(" PRIVMSG #bossfightlivearena :")){
+        continue;
+      }
+
+      const commandIndex = line.indexOf(" PRIVMSG #bossfightlivearena :");
+      const messageText =
+        line.slice(commandIndex + " PRIVMSG #bossfightlivearena :".length).trim();
+
+      if(messageText.toLowerCase() !== "!play"){
+        continue;
+      }
+
+      const tagPart = line.startsWith("@")
+        ? line.slice(1, line.indexOf(" "))
+        : "";
+
+      const tags: Record<string, string> = {};
+
+      for(const tag of tagPart.split(";")){
+        const separator = tag.indexOf("=");
+        if(separator === -1) continue;
+        tags[tag.slice(0, separator)] = tag.slice(separator + 1);
+      }
+
+      const userId = tags["user-id"];
+      const displayName =
+        tags["display-name"] ||
+        (line.match(/^:([^!]+)!/)?.[1] || "Player");
+
+      if(userId){
+        this.addTwitchPlayer(userId, displayName);
+      }
+    }
+  }
+
   onStart() {
     console.log(
       "🔥 BOSS FIGHT SERVER STARTED"
@@ -764,6 +677,7 @@ export class Chat extends Server<Env> {
     }
 
     this.scheduleAIAttack();
+    this.startTwitchChat();
   }
 
   onConnect(connection: Connection) {
@@ -2550,236 +2464,46 @@ export default {
   ){
     const url = new URL(request.url);
 
-    // ============================================================
-    // TWITCH OAUTH
-    // ============================================================
-
-    if(
-      request.method === "GET" &&
-      url.pathname === "/twitch/login"
-    ){
-      const clientId = env.TWITCH_CLIENT_ID;
-
-      if(!clientId || !env.TWITCH_CLIENT_SECRET){
+    if(url.pathname === "/twitch/login"){
+      try{
+        const id = env.Chat.idFromName("bossfight");
+        const stub = env.Chat.get(id);
+        const twitchUrl = await stub.beginTwitchOAuth();
+        return Response.redirect(twitchUrl, 302);
+      }catch(error){
+        console.error("❌ TWITCH LOGIN ERROR:", error);
         return new Response(
           "Twitch não configurado. Verifique TWITCH_CLIENT_ID e TWITCH_CLIENT_SECRET.",
-          { status: 500 }
+          { status:500 }
         );
       }
-
-      const redirectUri =
-        `${url.origin}${Chat.TWITCH_REDIRECT_PATH}`;
-
-      const twitchUrl =
-        new URL("https://id.twitch.tv/oauth2/authorize");
-
-      twitchUrl.searchParams.set(
-        "client_id",
-        clientId
-      );
-
-      twitchUrl.searchParams.set(
-        "redirect_uri",
-        redirectUri
-      );
-
-      twitchUrl.searchParams.set(
-        "response_type",
-        "code"
-      );
-
-      twitchUrl.searchParams.set(
-        "scope",
-        "user:read:chat user:bot channel:bot"
-      );
-
-      return Response.redirect(
-        twitchUrl.toString(),
-        302
-      );
     }
-
-    // ============================================================
-    // TWITCH OAUTH CALLBACK
-    // ============================================================
 
     if(
       request.method === "GET" &&
-      url.pathname === "/" &&
-      url.searchParams.has("code")
+      url.searchParams.has("code") &&
+      url.searchParams.has("state")
     ){
-      const code =
-        url.searchParams.get("code");
-
-      if(!code){
-        return new Response(
-          "Código OAuth ausente.",
-          { status: 400 }
-        );
-      }
-
       try{
-        const id =
-          env.Chat.idFromName("bossfight");
-
-        const stub =
-          env.Chat.get(id);
-
-        const result =
-          await stub.twitchOAuthCallback(
-            code,
-            `${url.origin}${Chat.TWITCH_REDIRECT_PATH}`
-          );
-
-        if(!result.ok){
-          return new Response(
-            `Twitch: ${result.error}`,
-            {
-              status: 400,
-              headers: {
-                "Content-Type": "text/plain; charset=utf-8"
-              }
-            }
-          );
-        }
+        const id = env.Chat.idFromName("bossfight");
+        const stub = env.Chat.get(id);
+        await stub.completeTwitchOAuth(
+          url.searchParams.get("code") || "",
+          url.searchParams.get("state") || ""
+        );
 
         return new Response(
-          "Twitch conectado com sucesso! Agora o comando !play está habilitado no chat.",
+          "Twitch conectado com sucesso! Você já pode usar !play no chat.",
           {
-            status: 200,
-            headers: {
-              "Content-Type": "text/plain; charset=utf-8"
-            }
+            status:200,
+            headers:{ "Content-Type":"text/plain; charset=utf-8" }
           }
         );
       }catch(error){
-        console.error(
-          "❌ TWITCH OAUTH CALLBACK ERROR:",
-          error
-        );
-
+        console.error("❌ TWITCH CALLBACK ERROR:", error);
         return new Response(
-          "Erro ao conectar a Twitch. Veja os logs do Worker.",
-          { status: 500 }
-        );
-      }
-    }
-
-    // ============================================================
-    // TWITCH EVENTSUB WEBHOOK
-    // ============================================================
-
-    if(
-      url.pathname === Chat.TWITCH_EVENTSUB_PATH
-    ){
-      if(request.method !== "POST"){
-        return new Response(
-          "Method Not Allowed",
-          { status: 405 }
-        );
-      }
-
-      const messageId =
-        request.headers.get(
-          "Twitch-Eventsub-Message-Id"
-        ) || "";
-
-      const timestamp =
-        request.headers.get(
-          "Twitch-Eventsub-Message-Timestamp"
-        ) || "";
-
-      const signature =
-        request.headers.get(
-          "Twitch-Eventsub-Message-Signature"
-        ) || "";
-
-      const messageType =
-        request.headers.get(
-          "Twitch-Eventsub-Message-Type"
-        ) || "";
-
-      const body = await request.text();
-
-      try{
-        const id =
-          env.Chat.idFromName("bossfight");
-
-        const stub =
-          env.Chat.get(id);
-
-        const valid =
-          await stub.verifyTwitchEventSub(
-            messageId,
-            timestamp,
-            body,
-            signature
-          );
-
-        if(!valid){
-          return new Response(
-            "Invalid signature",
-            { status: 403 }
-          );
-        }
-
-        const payload: any =
-          JSON.parse(body);
-
-        if(messageType === "webhook_callback_verification"){
-          return new Response(
-            payload.challenge || "",
-            {
-              status: 200,
-              headers: {
-                "Content-Type": "text/plain; charset=utf-8"
-              }
-            }
-          );
-        }
-
-        if(messageType === "notification"){
-          if(
-            payload.subscription?.type ===
-            "channel.chat.message"
-          ){
-            await stub.handleTwitchChatMessage(
-              payload.event,
-              messageId
-            );
-          }
-
-          return new Response(
-            "OK",
-            { status: 200 }
-          );
-        }
-
-        if(messageType === "revocation"){
-          console.warn(
-            "⚠️ TWITCH EVENTSUB REVOGADO:",
-            payload
-          );
-
-          return new Response(
-            "OK",
-            { status: 200 }
-          );
-        }
-
-        return new Response(
-          "OK",
-          { status: 200 }
-        );
-      }catch(error){
-        console.error(
-          "❌ TWITCH EVENTSUB ERROR:",
-          error
-        );
-
-        return new Response(
-          "Webhook error",
-          { status: 500 }
+          `Falha ao conectar Twitch: ${error instanceof Error ? error.message : String(error)}`,
+          { status:500 }
         );
       }
     }
