@@ -2656,6 +2656,8 @@ multiplayerSocket.onmessage = (event) => {
 
         nextPlayerId = 1;
 
+        gameOverHandled = false;
+
     }
 
     console.log(
@@ -2854,7 +2856,8 @@ multiplayerSocket.onmessage = (event) => {
             const localPlayer =
                 players.find(
                     player =>
-                        !player.remoteId
+                        !player.remoteId &&
+                        !player.isAI
                 );
 
 
@@ -2865,7 +2868,6 @@ multiplayerSocket.onmessage = (event) => {
             */
 
             if(
-                !remotePlayer.isAI &&
                 localPlayer &&
                 localPlayer.name ===
                     remotePlayer.name &&
@@ -2901,7 +2903,11 @@ multiplayerSocket.onmessage = (event) => {
                 players.some(
                     player =>
                         player.remoteId ===
-                        remotePlayer.id
+                            remotePlayer.id ||
+                        (
+                            remotePlayer.isAI === true &&
+                            player.isAI === true
+                        )
                 );
 
 
@@ -3514,268 +3520,6 @@ multiplayerSocket.onmessage = (event) => {
             targetPlayer.maxHp = data.maxHp;
             targetPlayer.alive = data.alive;
 
-            /* =====================================
-               💀 CHECK GAME OVER — OFFICIAL BOSS HIT
-               The Worker has just confirmed the death.
-            ===================================== */
-
-            const alivePlayersAfterBossHit =
-                players.filter(
-                    player =>
-                        player.alive &&
-                        !player.isAI
-                );
-
-            if(
-                wasAlive &&
-                !targetPlayer.alive &&
-                alivePlayersAfterBossHit.length === 0
-            ){
-
-                bossEnding = true;
-                battlePaused = true;
-
-                const trophyElement =
-                    victory.querySelector(
-                        ".victoryTrophy"
-                    );
-
-                if(trophyElement){
-                    trophyElement.style.display =
-                        "none";
-                }
-
-                /* =====================================
-                   💀 GAME OVER SOUND — 3X
-                ===================================== */
-
-                const gameOverSound1 =
-                    new Audio("gameover.mp3");
-
-                const gameOverSound2 =
-                    new Audio("gameover.mp3");
-
-                const gameOverSound3 =
-                    new Audio("gameover.mp3");
-
-                gameOverSound1.volume = 1.0;
-                gameOverSound2.volume = 1.0;
-                gameOverSound3.volume = 1.0;
-
-                gameOverSound1.play()
-                    .catch(()=>{});
-
-                gameOverSound2.play()
-                    .catch(()=>{});
-
-                gameOverSound3.play()
-                    .catch(()=>{});
-
-                /* =====================================
-                   😈 GAME OVER LAUGH
-                ===================================== */
-
-                setTimeout(() => {
-
-                    const gameOverLaugh =
-                        new Audio("gameoverlaugh.mp3");
-
-                    gameOverLaugh.volume = 1.0;
-
-                    gameOverLaugh.play()
-                        .catch(()=>{});
-
-                },2000);
-
-                /* =====================================
-                   ☠️ GAME OVER SCREEN
-                ===================================== */
-
-                const titleElement =
-                    victory.querySelector(
-                        ".victoryTitle"
-                    );
-
-                if(titleElement){
-                    titleElement.textContent =
-                        "GAME OVER";
-                }
-
-                victoryBoss.textContent =
-                    "💀";
-
-                victoryText.textContent =
-                    "NEW BATTLE IN 10";
-
-                victory.classList.add(
-                    "gameOver"
-                );
-
-                victory.classList.add(
-                    "active"
-                );
-
-                flash.classList.add(
-                    "active"
-                );
-
-                eventBox.textContent =
-                    "💀 THE BOSS WON! NEW BATTLE IN 10 SECONDS!";
-
-                addEvent(
-                    "💀 GAME OVER!"
-                );
-
-                /* =====================================
-                   ⏱️ COUNTDOWN FOR NEW BATTLE
-                ===================================== */
-
-                let countdown = 10;
-
-                const restartInterval =
-                    setInterval(() => {
-
-                        countdown--;
-
-                        if(countdown > 0){
-
-                            victoryText.textContent =
-                                "NEW BATTLE IN " +
-                                countdown;
-
-                        }
-                        else{
-
-                            clearInterval(
-                                restartInterval
-                            );
-
-                            victory.classList.remove(
-                                "active"
-                            );
-
-                            victory.classList.remove(
-                                "gameOver"
-                            );
-
-                            flash.classList.remove(
-                                "active"
-                            );
-
-                            /* =========================
-                               🔄 RESTART BATTLE
-                               RESET SERVER + KEEP ONE AI
-                            ========================= */
-
-                            players.length = 0;
-
-                            if(playersContainer){
-                                playersContainer.innerHTML = "";
-                            }
-
-                            nextPlayerId = 1;
-
-                            bossLevel = 1;
-
-                            currentBoss =
-                                generateBoss(
-                                    bossLevel
-                                );
-
-                            maxBossHp =
-                                currentBoss.hp;
-
-                            bossHp =
-                                maxBossHp;
-
-                            wins = 0;
-
-                            bossEnding = false;
-
-                            battlePaused = false;
-
-                            /* =====================================
-                               🏆 RESET VICTORY SCREEN
-                            ===================================== */
-
-                            const trophyElement =
-                                victory.querySelector(
-                                    ".victoryTrophy"
-                                );
-
-                            if(trophyElement){
-                                trophyElement.style.display =
-                                    "";
-                            }
-
-                            victory.classList.remove(
-                                "active"
-                            );
-
-                            victory.classList.remove(
-                                "gameOver"
-                            );
-
-                            flash.classList.remove(
-                                "active"
-                            );
-
-                            eventBox.textContent =
-                                "⚔️ STARTING NEW BATTLE...";
-
-                            addEvent(
-                                "⚔️ NEW BATTLE — AI READY"
-                            );
-
-                            /* =====================================
-                               🌐 RESET OFFICIAL SERVER
-                               Server removes old humans and
-                               recreates exactly one AI.
-                            ===================================== */
-
-                            if(
-                                multiplayerSocket.readyState ===
-                                WebSocket.OPEN
-                            ){
-
-                                multiplayerSocket.send(
-                                    JSON.stringify({
-
-                                        type:
-                                            "resetGame",
-
-                                        gameState:{
-
-                                            bossLevel:
-                                                bossLevel,
-
-                                            currentBoss:
-                                                currentBoss,
-
-                                            maxBossHp:
-                                                maxBossHp,
-
-                                            bossHp:
-                                                bossHp,
-
-                                            wins:
-                                                wins
-
-                                        }
-
-                                    })
-                                );
-
-                            }
-
-                            update();
-
-                        }
-
-                    },1000);
-
-            }
-
             const bossHitSound =
                 new Audio("golpeboss.mp3");
 
@@ -3786,28 +3530,16 @@ multiplayerSocket.onmessage = (event) => {
 
             if(wasAlive && !targetPlayer.alive){
 
-                const deathSounds = {
-                    TANK:"tankmorto.mp3",
-                    WARRIOR:"guerreiromorto.mp3",
-                    ARCHER:"archermorto.mp3",
-                    MAGE:"magomorto.mp3",
-                    PRIEST:"healermorto.mp3"
-                };
+                /*
+                   A morte oficial vem do Worker.
+                   O fluxo único de morte/Game Over
+                   passa pelo killPlayer().
+                */
 
-                const deathSoundFile =
-                    deathSounds[targetPlayer.class];
+                targetPlayer.alive = true;
+                targetPlayer.hp = targetPlayer.maxHp;
 
-                if(deathSoundFile){
-
-                    const deathSound =
-                        new Audio(deathSoundFile);
-
-                    deathSound.volume = 0.9;
-
-                    deathSound.play()
-                        .catch(()=>{});
-
-                }
+                killPlayer(targetPlayer);
 
             }
 
@@ -5755,6 +5487,8 @@ function healerAction(healer){
    DEATH
 ============================================================ */
 
+let gameOverHandled = false;
+
 function killPlayer(player){
 
     if(!player.alive){
@@ -5825,13 +5559,13 @@ function killPlayer(player){
 
     const alivePlayers =
         players.filter(
-            player =>
-                player.alive &&
-                !player.isAI
+            player => player.alive
         );
 
 
-    if(alivePlayers.length === 0){
+    if(alivePlayers.length === 0 && !gameOverHandled){
+
+        gameOverHandled = true;
 
         bossEnding = true;
 
@@ -5981,78 +5715,71 @@ setTimeout(() => {
 
 
                     /* =========================
-                       🔄 RESTART BATTLE
-                       CLEAR ALL PLAYERS
+                       🔄 RESET OFFICIAL BATTLE
+                       SERVER KEEPS EXACTLY ONE AI
                     ========================= */
 
-                    players.length = 0;
-
-                    playersContainer.innerHTML = "";
-
+                    gameOverHandled = false;
 
                     bossLevel = 1;
-
 
                     currentBoss =
                         generateBoss(
                             bossLevel
                         );
 
-
                     maxBossHp =
                         currentBoss.hp;
-
 
                     bossHp =
                         maxBossHp;
 
+                    wins = 0;
 
                     bossEnding = false;
 
                     battlePaused = false;
 
+                    if(
+                        multiplayerSocket.readyState ===
+                        WebSocket.OPEN
+                    ){
 
-                    /* =====================================
-                       🏆 SHOW VICTORY TROPHY AGAIN
-                    ===================================== */
+                        multiplayerSocket.send(
+                            JSON.stringify({
 
-                    const trophyElement =
-                        victory.querySelector(
-                            ".victoryTrophy"
+                                type:"resetGame",
+
+                                gameState:{
+
+                                    bossLevel:
+                                        bossLevel,
+
+                                    currentBoss:
+                                        currentBoss,
+
+                                    maxBossHp:
+                                        maxBossHp,
+
+                                    bossHp:
+                                        bossHp,
+
+                                    wins:
+                                        wins
+
+                                }
+
+                            })
                         );
-
-
-                    if(trophyElement){
-
-                        trophyElement.style.display =
-                            "";
 
                     }
 
-
-                    victory.classList.remove(
-                        "active"
-                    );
-
-
-                    victory.classList.remove(
-                        "gameOver"
-                    );
-
-
-                    flash.classList.remove(
-                        "active"
-                    );
-
-
                     eventBox.textContent =
-                        "🔥 NEW BATTLE HAS STARTED!";
-
+                        "⚔️ STARTING NEW BATTLE...";
 
                     addEvent(
-                        "🔥 NEW BATTLE — BOSS LEVEL 1"
+                        "⚔️ NEW BATTLE — AI READY"
                     );
-
 
                     update();
 
@@ -8867,7 +8594,7 @@ function scheduleNextSkill(){
    Habilidades reais chegarão da Twitch pelo Worker.
 */
 
-const LOCAL_TEST_MODE = true;
+const LOCAL_TEST_MODE = false;
 
 if(LOCAL_TEST_MODE){
     scheduleNextSkill();
