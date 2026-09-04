@@ -281,7 +281,7 @@ export class Chat extends Server<Env> {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${tokenData.access_token}`,
+          "Authorization": `Bearer ${appTokenData.access_token}`,
           "Client-Id": clientId,
           "Content-Type": "application/json"
         },
@@ -304,25 +304,21 @@ export class Chat extends Server<Env> {
     const subscriptionData: any =
       await subscriptionResponse.json();
 
-    if(
-      !subscriptionResponse.ok &&
-      !String(subscriptionData?.message || "")
-        .toLowerCase()
-        .includes("subscription")
-    ){
-      console.error(
-        "❌ TWITCH EVENTSUB ERROR:",
-        subscriptionData
-      );
+    if(!subscriptionResponse.ok){
+     console.error(
+       "❌ TWITCH EVENTSUB ERROR:",
+       subscriptionResponse.status,
+       subscriptionData
+     );
 
-      return {
-        ok: false,
-        error: "A Twitch recusou a assinatura do chat.",
-        details: subscriptionData
-      };
-    }
+     return {
+       ok: false,
+       error: "A Twitch recusou a assinatura do chat.",
+       details: subscriptionData
+     };
+   }
 
-    await this.ctx.storage.put(
+       await this.ctx.storage.put(
       "twitch:connected",
       true
     );
