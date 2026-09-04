@@ -2646,6 +2646,33 @@ multiplayerSocket.onmessage = (event) => {
 
         if(data.type === "roomState"){
 
+    /* =====================================
+       🔄 RESET OFICIAL DA BATALHA
+    ===================================== */
+    if(data.reset === true){
+        players.length = 0;
+
+        if(playersContainer){
+            playersContainer.innerHTML = "";
+        }
+
+        nextPlayerId = 1;
+        gameOverHandled = false;
+        bossEnding = false;
+        battlePaused = false;
+
+        victory.classList.remove("active");
+        victory.classList.remove("gameOver");
+        flash.classList.remove("active");
+
+        const trophyElement =
+            victory.querySelector(".victoryTrophy");
+
+        if(trophyElement){
+            trophyElement.style.display = "block";
+        }
+    }
+
     console.log(
         "👥 PLAYERS IN ROOM:",
         data.players
@@ -2973,7 +3000,10 @@ multiplayerSocket.onmessage = (event) => {
 
                 healing:
                     remotePlayer.healing ||
-                    0
+                    0,
+
+                isAI:
+                    remotePlayer.isAI === true
 
             };
 
@@ -3086,7 +3116,10 @@ multiplayerSocket.onmessage = (event) => {
 
                 totalDamage:0,
 
-                healing:0
+                healing:0,
+
+                isAI:
+                    remotePlayer.isAI === true
 
             };
 
@@ -5864,31 +5897,32 @@ setTimeout(() => {
                        CLEAR ALL PLAYERS
                     ========================= */
 
-                    players.length = 0;
-
-                    playersContainer.innerHTML = "";
-
-
-                    bossLevel = 1;
-
-
-                    currentBoss =
-                        generateBoss(
-                            bossLevel
-                        );
-
-
-                    maxBossHp =
-                        currentBoss.hp;
-
-
-                    bossHp =
-                        maxBossHp;
-
-
                     bossEnding = false;
+                    battlePaused = true;
 
-                    battlePaused = false;
+                    /* =====================================
+                       🌐 RESET OFICIAL PELO SERVIDOR
+                    ===================================== */
+                    if(
+                        multiplayerSocket.readyState ===
+                        WebSocket.OPEN
+                    ){
+                        const resetBoss =
+                            generateBoss(1);
+
+                        multiplayerSocket.send(
+                            JSON.stringify({
+                                type:"resetGame",
+                                gameState:{
+                                    bossLevel:1,
+                                    currentBoss:resetBoss,
+                                    maxBossHp:resetBoss.hp,
+                                    bossHp:resetBoss.hp,
+                                    wins:0
+                                }
+                            })
+                        );
+                    }
 
 
                     /* =====================================
@@ -8567,26 +8601,15 @@ function startPlayerEntries(){
 
        Cada navegador representa
        apenas 1 jogador.
-
-       A IA também fica dentro de
-       "players", portanto não podemos
-       usar players.length para saber
-       se o jogador local já existe.
     */
 
-    const localPlayerExists =
-        players.some(
-            player =>
-                !player.isAI
-        );
-
-
-    if(localPlayerExists){
+    if(players.length >= 1){
         return;
     }
 
 
     createPlayer();
+
 }
 
 
@@ -8835,38 +8858,13 @@ scheduleBossAttack();
    INITIALIZATION
 ============================================================ */
 
-if(LOCAL_TEST_MODE){
-    startPlayerEntries();
-}
-
-
 /*
-   Creates the AI for each player
-   when they join.
+   A IA oficial agora é criada e controlada
+   exclusivamente pelo Worker.
+
+   Não criamos mais um jogador local automático
+   nem iniciamos ataques automáticos no navegador.
 */
-
-if(LOCAL_TEST_MODE){
-
-setInterval(()=>{
-
-    players.forEach(player => {
-
-        if(player.aiStarted){
-            return;
-        }
-
-
-        startPlayerAI(player);
-
-
-        player.aiStarted = true;
-
-    });
-
-},500);
-
-}
-
 
 /* ============================================================
    FIRST UPDATE
