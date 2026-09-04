@@ -4,16 +4,27 @@ if(data.type === "resetGame"){
         this.resetTimer = null;
     }
 
-    // Após o GAME OVER, todos os jogadores humanos saem.
-    // Para voltar, precisam usar !play novamente.
+    // ============================================================
+    // APÓS GAME OVER:
+    // TODOS OS HUMANOS SAEM DA ARENA.
+    // PARA VOLTAR, PRECISAM USAR !play NOVAMENTE.
+    // ============================================================
+
     for(const [id, player] of this.players){
         if(!player.isAI){
             this.players.delete(id);
         }
     }
 
-    // Garante que existe somente a IA.
+    // ============================================================
+    // GARANTE QUE EXISTE SOMENTE UMA IA
+    // ============================================================
+
     this.ensureAI();
+
+    // ============================================================
+    // RESET DO BOSS PARA O NÍVEL 1
+    // ============================================================
 
     const resetBoss =
         data.gameState?.currentBoss ||
@@ -25,7 +36,6 @@ if(data.type === "resetGame"){
         };
 
     const resetMaxHp =
-        Number(data.gameState?.maxBossHp) ||
         Number(resetBoss?.hp) ||
         10000;
 
@@ -38,7 +48,10 @@ if(data.type === "resetGame"){
         nextBossAttackAt: 0
     };
 
-    // Reseta a IA com uma nova classe.
+    // ============================================================
+    // RESETA A IA COM UMA NOVA CLASSE ALEATÓRIA
+    // ============================================================
+
     const ai = this.players.get("AI-1");
 
     if(ai){
@@ -62,12 +75,21 @@ if(data.type === "resetGame"){
         this.players.set("AI-1", ai);
     }
 
+    // ============================================================
+    // REINICIA O TIMER DA IA
+    // ============================================================
+
     if(this.botTimer){
         clearTimeout(this.botTimer);
         this.botTimer = null;
     }
 
     this.scheduleAIAttack();
+
+    // ============================================================
+    // ENVIA A ARENA RESETADA
+    // SOMENTE A IA PERMANECE.
+    // ============================================================
 
     this.broadcast(
         JSON.stringify({
