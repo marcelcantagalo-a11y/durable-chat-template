@@ -8567,15 +8567,26 @@ function startPlayerEntries(){
 
        Cada navegador representa
        apenas 1 jogador.
+
+       A IA também fica dentro de
+       "players", portanto não podemos
+       usar players.length para saber
+       se o jogador local já existe.
     */
 
-    if(players.length >= 1){
+    const localPlayerExists =
+        players.some(
+            player =>
+                !player.isAI
+        );
+
+
+    if(localPlayerExists){
         return;
     }
 
 
     createPlayer();
-
 }
 
 
