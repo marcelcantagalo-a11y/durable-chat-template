@@ -185,21 +185,26 @@ export class Chat extends Server<Env> {
 
     const stats = this.getClassStats(ai.class);
 
-    // Priest é suporte: cura um jogador vivo que esteja ferido.
+    // Priest é suporte:
+    // 1. Prioriza um jogador humano ferido.
+    // 2. Se não houver outro jogador ferido, cura a si mesma.
     if(ai.class === "PRIEST"){
       const damagedPlayers = livingPlayers.filter(
         player => !player.isAI && player.hp < player.maxHp
       );
 
-      if(damagedPlayers.length === 0){
+      let target;
+
+      if(damagedPlayers.length > 0){
+        damagedPlayers.sort(
+          (a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp)
+        );
+        target = damagedPlayers[0];
+      }else if(ai.hp < ai.maxHp){
+        target = ai;
+      }else{
         return;
       }
-
-      damagedPlayers.sort(
-        (a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp)
-      );
-
-      const target = damagedPlayers[0];
 
       let heal =
         Math.floor(Math.random() * 16) + 15;
