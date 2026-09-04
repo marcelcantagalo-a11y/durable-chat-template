@@ -11,6 +11,7 @@ export class Chat extends Server<Env> {
   gameState: any = null;
   lastSkillClass = null;
   botTimer: any = null;
+  resetTimer: any = null;
 
   getClassStats(className: string) {
     const stats: Record<string, any> = {
@@ -339,6 +340,38 @@ export class Chat extends Server<Env> {
         gameState: this.gameState
       })
     );
+  }
+
+  scheduleGameReset() {
+    if(this.resetTimer){ return; }
+    this.resetTimer = setTimeout(() => {
+      this.resetTimer = null;
+      this.ensureAI();
+      for(const [id, player] of this.players){
+        if(player.isAI) continue;
+        const stats = this.getClassStats(player.class);
+        player.maxHp = stats.maxHp; player.hp = stats.maxHp; player.alive = true;
+        player.taunt = false; player.totalDamage = 0; player.healing = 0;
+        player.level = 1; player.xp = 0;
+        this.players.set(id, player);
+      }
+      const ai = this.players.get("AI-1");
+      if(ai){
+        const newClass = this.getRandomAIClass();
+        const stats = this.getClassStats(newClass);
+        ai.position = 0; ai.class = newClass; ai.maxHp = stats.maxHp; ai.hp = stats.maxHp;
+        ai.alive = true; ai.taunt = false; ai.totalDamage = 0; ai.healing = 0;
+        ai.level = 1; ai.xp = 0; ai.isAI = true;
+        this.players.set("AI-1", ai);
+      }
+      const boss = this.gameState?.currentBoss || {name:"THE DEMON", icon:"👹", hp:10000};
+      const hp = Number(boss.hp) || 10000;
+      this.gameState = {bossLevel:1, currentBoss:boss, maxBossHp:hp, bossHp:hp, wins:0, nextBossAttackAt:0};
+      if(this.botTimer){ clearTimeout(this.botTimer); this.botTimer = null; }
+      this.scheduleAIAttack();
+      this.broadcast(JSON.stringify({type:"roomState", reset:true, players:this.getOrderedPlayers(), gameState:this.gameState}));
+      console.log("🔄 AUTOMATIC GAME RESET");
+    },10000);
   }
 
   onStart() {
@@ -1542,6 +1575,12 @@ export class Chat extends Server<Env> {
             );
 
 
+            const aliveAfterBossAttack = [...this.players.values()].filter(player => player.alive);
+
+            if(aliveAfterBossAttack.length === 0){
+                this.scheduleGameReset();
+            }
+
             console.log(
 
                 "👹 BOSS ATTACK:",
@@ -1890,6 +1929,11 @@ export class Chat extends Server<Env> {
         ===================================== */
 
         if(data.type === "resetGame"){
+            if(this.resetTimer){
+                clearTimeout(this.resetTimer);
+                this.resetTimer = null;
+            }
+
 
             this.ensureAI();
 
