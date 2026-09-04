@@ -113,7 +113,6 @@ export class Chat extends Server<Env> {
     const stats = this.getClassStats(ai.class);
     console.log("🤖 IA CLASSE:", ai.class);
 
-    // PRIEST cura
     if (ai.class === "PRIEST") {
       const damagedPlayers = livingPlayers.filter(
         player => !player.isAI && player.hp < player.maxHp
@@ -153,7 +152,6 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    // ATAQUE
     if (Math.random() > stats.accuracy) {
       this.broadcast(JSON.stringify({
         type: "attackResult",
@@ -273,6 +271,7 @@ export class Chat extends Server<Env> {
   private twitchSocket: WebSocket | null = null;
   private twitchBuffer = "";
   private twitchReconnectTimer: any = null;
+  private twitchConnected = false;
 
   private getWorkerEnv(): any {
     return (this as any).env;
@@ -291,6 +290,7 @@ export class Chat extends Server<Env> {
         try { this.twitchSocket.close(); } catch {}
         this.twitchSocket = null;
       }
+      this.twitchConnected = false;
       
       console.log("✅ AUTENTICAÇÃO TWITCH RESETADA!");
       return { success: true };
@@ -384,7 +384,7 @@ export class Chat extends Server<Env> {
   }
 
   private async connectTwitchChat() {
-    if (this.twitchSocket) {
+    if (this.twitchSocket && this.twitchConnected) {
       console.log("🟣 Twitch chat já está conectado");
       return;
     }
@@ -400,12 +400,19 @@ export class Chat extends Server<Env> {
 
     try {
       console.log("🟣 Conectando ao Twitch chat...");
+      
+      if (this.twitchSocket) {
+        try { this.twitchSocket.close(); } catch {}
+        this.twitchSocket = null;
+      }
+      
       const socket = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
       this.twitchSocket = socket;
       this.twitchBuffer = "";
+      this.twitchConnected = false;
 
       socket.addEventListener("open", () => {
-        console.log("🟣 WebSocket Twitch aberto");
+        console.log("🟣 WebSocket Twitch aberto - enviando comandos...");
         
         socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
         socket.send(`PASS oauth:${token}\r\n`);
@@ -413,6 +420,7 @@ export class Chat extends Server<Env> {
         socket.send("JOIN #bossfightlivearena\r\n");
         
         console.log("📤 Comandos enviados: CAP, PASS, NICK, JOIN");
+        this.twitchConnected = true;
       });
 
       socket.addEventListener("message", (event: MessageEvent) => {
@@ -424,17 +432,20 @@ export class Chat extends Server<Env> {
       socket.addEventListener("close", (event) => {
         console.log(`🔴 Twitch chat desconectado - Código: ${event.code} - Motivo: ${event.reason || "sem motivo"}`);
         this.twitchSocket = null;
+        this.twitchConnected = false;
         this.scheduleTwitchReconnect();
       });
 
       socket.addEventListener("error", (error) => {
         console.error("❌ Erro no Twitch socket:", error);
+        this.twitchConnected = false;
         try { socket.close(); } catch {}
       });
 
     } catch (error) {
       console.error("❌ Erro ao conectar Twitch:", error);
       this.twitchSocket = null;
+      this.twitchConnected = false;
       this.scheduleTwitchReconnect();
     }
   }
@@ -462,6 +473,7 @@ export class Chat extends Server<Env> {
         continue;
       }
 
+      // Verifica se é uma mensagem PRIVMSG
       if (line.includes(" PRIVMSG #bossfightlivearena :")) {
         const commandIndex = line.indexOf(" PRIVMSG #bossfightlivearena :");
         const messageText = line.slice(commandIndex + " PRIVMSG #bossfightlivearena :".length).trim();
@@ -487,6 +499,11 @@ export class Chat extends Server<Env> {
             this.addTwitchPlayer(userId, displayName);
           }
         }
+      }
+      
+      // Log para ver se o bot entrou no canal
+      if (line.includes(" 366 ")) {
+        console.log("✅ Bot entrou no canal #bossfightlivearena!");
       }
     }
   }
