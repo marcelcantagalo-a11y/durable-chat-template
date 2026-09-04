@@ -278,7 +278,6 @@ export class Chat extends Server<Env> {
     return (this as any).env;
   }
 
-  // ========== NOVO MÉTODO PARA RESETAR TOKENS ==========
   async resetTwitchAuth() {
     console.log("🧹 RESETANDO AUTENTICAÇÃO TWITCH...");
     try {
@@ -408,7 +407,6 @@ export class Chat extends Server<Env> {
       socket.addEventListener("open", () => {
         console.log("🟣 WebSocket Twitch aberto");
         
-        // Envia TUDO de uma vez SEM delay
         socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
         socket.send(`PASS oauth:${token}\r\n`);
         socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
@@ -557,7 +555,6 @@ export class Chat extends Server<Env> {
   onStart() {
     console.log("🔥 BOSS FIGHT SERVER STARTED");
     
-    // Inicializa o gameState se não existir
     if (!this.gameState) {
       const boss = { name: "DEMON LORD", icon: "👹", hp: 10000, special: false };
       this.gameState = {
@@ -571,17 +568,14 @@ export class Chat extends Server<Env> {
       console.log("🎮 GAME STATE INICIALIZADO:", this.gameState);
     }
     
-    // Garante que a IA existe
     this.ensureAI();
     
-    // Inicia o ataque da IA
     if (this.botTimer) {
       clearTimeout(this.botTimer);
       this.botTimer = null;
     }
     this.scheduleAIAttack(1000);
     
-    // Conecta ao Twitch
     this.connectTwitchChat();
   }
 
@@ -903,7 +897,6 @@ export default {
   async fetch(request: Request, env: any) {
     const url = new URL(request.url);
 
-    // ========== NOVA ROTA PARA RESETAR TOKENS ==========
     if (url.pathname === "/twitch/reset") {
       try {
         const id = env.Chat.idFromName("bossfight");
@@ -951,4 +944,27 @@ export default {
       try {
         const id = env.Chat.idFromName("bossfight");
         const stub = env.Chat.get(id);
-        await stub.complete
+        await stub.completeTwitchOAuth(code, state);
+        return new Response(
+          "✅ Twitch conectado com sucesso! Use !play no chat.",
+          { headers: { "Content-Type": "text/plain; charset=utf-8" } }
+        );
+      } catch (error) {
+        console.error("❌ TWITCH CALLBACK ERROR:", error);
+        return new Response(
+          `Erro: ${error instanceof Error ? error.message : String(error)}`,
+          { status: 500 }
+        );
+      }
+    }
+
+    const response = await routePartykitRequest(request, { ...env });
+    if (response) return response;
+
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("Not found", { status: 404 });
+  }
+};
