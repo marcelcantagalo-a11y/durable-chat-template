@@ -28,7 +28,6 @@ export class Chat extends Server<Env> {
     return classes[Math.floor(Math.random() * classes.length)];
   }
 
-  // ========== IA DO SERVIDOR ==========
   ensureAI() {
     const aiId = "AI-1";
     for (const [id, player] of this.players) {
@@ -57,7 +56,9 @@ export class Chat extends Server<Env> {
         isAI: true
       };
       this.players.set(aiId, ai);
+      console.log("🤖 IA CRIADA:", ai.class);
     }
+    return ai;
   }
 
   scheduleAIAttack(delay?: number) {
@@ -75,18 +76,42 @@ export class Chat extends Server<Env> {
       this.aiAttack();
       this.scheduleAIAttack();
     }, wait);
+    
+    console.log("⏱️ PRÓXIMO ATAQUE IA EM:", wait, "ms");
   }
 
   aiAttack() {
-    if (!this.gameState || this.gameState.bossHp <= 0) return;
-    const livingPlayers = [...this.players.values()].filter(player => player.alive);
-    if (livingPlayers.length === 0) return;
+    console.log("🤖 IA ATACANDO...");
+    
+    if (!this.gameState) {
+      console.log("❌ Sem gameState");
+      return;
+    }
+    
+    if (this.gameState.bossHp <= 0) {
+      console.log("❌ Boss já morreu");
+      return;
+    }
 
-    this.ensureAI();
+    const livingPlayers = [...this.players.values()].filter(player => player.alive);
+    if (livingPlayers.length === 0) {
+      console.log("❌ Sem jogadores vivos");
+      return;
+    }
+
     const ai = this.players.get("AI-1");
-    if (!ai || !ai.alive || ai.hp <= 0) return;
+    if (!ai) {
+      console.log("❌ IA não encontrada");
+      return;
+    }
+
+    if (!ai.alive || ai.hp <= 0) {
+      console.log("❌ IA está morta");
+      return;
+    }
 
     const stats = this.getClassStats(ai.class);
+    console.log("🤖 IA CLASSE:", ai.class);
 
     // PRIEST cura
     if (ai.class === "PRIEST") {
@@ -124,6 +149,7 @@ export class Chat extends Server<Env> {
         healerHealing: ai.healing,
         isAI: true
       }));
+      console.log("💚 IA CUROU:", target.name, "+", heal);
       return;
     }
 
@@ -143,6 +169,7 @@ export class Chat extends Server<Env> {
         level: ai.level,
         isAI: true
       }));
+      console.log("❌ IA ERROU");
       return;
     }
 
@@ -170,9 +197,10 @@ export class Chat extends Server<Env> {
       level: ai.level,
       isAI: true
     }));
+    
+    console.log("⚔️ IA ATACOU:", ai.name, "-", damage, "dano" + (critical ? " 💥CRÍTICO!" : ""));
   }
 
-  // ========== GESTÃO DA SALA ==========
   getOrderedPlayers() {
     return [...this.players.values()].sort((a, b) => a.position - b.position);
   }
@@ -191,6 +219,54 @@ export class Chat extends Server<Env> {
       players: this.getOrderedPlayers(),
       gameState: this.gameState
     }));
+  }
+
+  scheduleGameReset() {
+    if (this.resetTimer) return;
+    this.resetTimer = setTimeout(() => {
+      this.resetTimer = null;
+      this.ensureAI();
+      for (const [id, player] of this.players) {
+        if (player.isAI) continue;
+        const stats = this.getClassStats(player.class);
+        player.maxHp = stats.maxHp;
+        player.hp = stats.maxHp;
+        player.alive = true;
+        player.taunt = false;
+        player.totalDamage = 0;
+        player.healing = 0;
+        player.level = 1;
+        player.xp = 0;
+        this.players.set(id, player);
+      }
+      const ai = this.players.get("AI-1");
+      if (ai) {
+        const newClass = this.getRandomAIClass();
+        const stats = this.getClassStats(newClass);
+        ai.position = 0;
+        ai.class = newClass;
+        ai.maxHp = stats.maxHp;
+        ai.hp = stats.maxHp;
+        ai.alive = true;
+        ai.taunt = false;
+        ai.totalDamage = 0;
+        ai.healing = 0;
+        ai.level = 1;
+        ai.xp = 0;
+        ai.isAI = true;
+        this.players.set("AI-1", ai);
+      }
+      const boss = this.gameState?.currentBoss || { name: "THE DEMON", icon: "👹", hp: 10000 };
+      const hp = Number(boss.hp) || 10000;
+      this.gameState = { bossLevel: 1, currentBoss: boss, maxBossHp: hp, bossHp: hp, wins: 0, nextBossAttackAt: 0 };
+      if (this.botTimer) {
+        clearTimeout(this.botTimer);
+        this.botTimer = null;
+      }
+      this.scheduleAIAttack();
+      this.broadcast(JSON.stringify({ type: "roomState", reset: true, players: this.getOrderedPlayers(), gameState: this.gameState }));
+      console.log("🔄 AUTOMATIC GAME RESET");
+    }, 10000);
   }
 
   // ========== TWITCH INTEGRAÇÃO ==========
@@ -230,7 +306,7 @@ export class Chat extends Server<Env> {
   async completeTwitchOAuth(code: string, state: string) {
     const env = this.getWorkerEnv();
     const savedState: any = await this.ctx.storage.get("twitch_oauth_state");
-    
+
     if (!savedState || savedState.value !== state || Number(savedState.expiresAt) < Date.now()) {
       throw new Error("OAuth state inválido ou expirado");
     }
@@ -352,7 +428,6 @@ export class Chat extends Server<Env> {
     this.twitchBuffer = lines.pop() || "";
 
     for (const line of lines) {
-      // PING
       if (line.startsWith("PING")) {
         if (this.twitchSocket) {
           this.twitchSocket.send("PONG :tmi.twitch.tv\r\n");
@@ -360,18 +435,16 @@ export class Chat extends Server<Env> {
         continue;
       }
 
-      // Comando !play
       if (line.includes(" PRIVMSG #bossfightlivearena :")) {
         const commandIndex = line.indexOf(" PRIVMSG #bossfightlivearena :");
         const messageText = line.slice(commandIndex + " PRIVMSG #bossfightlivearena :".length).trim();
-        
+
         console.log(`📨 Mensagem recebida: "${messageText}"`);
 
         if (messageText.toLowerCase() === "!play") {
-          // Extrai tags
           const tagPart = line.startsWith("@") ? line.slice(1, line.indexOf(" ")) : "";
           const tags: Record<string, string> = {};
-          
+
           for (const tag of tagPart.split(";")) {
             const separator = tag.indexOf("=");
             if (separator === -1) continue;
@@ -454,14 +527,44 @@ export class Chat extends Server<Env> {
   // ========== CICLO DE VIDA ==========
   onStart() {
     console.log("🔥 BOSS FIGHT SERVER STARTED");
+    
+    // Inicializa o gameState se não existir
+    if (!this.gameState) {
+      const boss = { name: "DEMON LORD", icon: "👹", hp: 10000, special: false };
+      this.gameState = {
+        bossLevel: 1,
+        currentBoss: boss,
+        maxBossHp: 10000,
+        bossHp: 10000,
+        wins: 0,
+        nextBossAttackAt: 0
+      };
+      console.log("🎮 GAME STATE INICIALIZADO:", this.gameState);
+    }
+    
+    // Garante que a IA existe
     this.ensureAI();
-    this.scheduleAIAttack();
+    
+    // Inicia o ataque da IA
+    if (this.botTimer) {
+      clearTimeout(this.botTimer);
+      this.botTimer = null;
+    }
+    this.scheduleAIAttack(1000); // Começa após 1 segundo
+    
+    // Conecta ao Twitch
     this.connectTwitchChat();
   }
 
   onConnect(connection: Connection) {
     this.ensureAI();
     console.log("🟢 PLAYER CONNECTED:", connection.id);
+    
+    // Se a IA não estiver rodando, inicia
+    if (!this.botTimer) {
+      this.scheduleAIAttack(1000);
+    }
+    
     this.sendRoomState(connection);
   }
 
@@ -469,9 +572,287 @@ export class Chat extends Server<Env> {
     try {
       const data: any = JSON.parse(message as string);
 
-      // ... (mantenha todo o seu código onMessage aqui - é muito grande para repetir)
-      // Mas certifique-se de que ele está completo
-      
+      if (data.type === "initGame") {
+        if (this.gameState === null) {
+          this.gameState = {
+            bossLevel: data.gameState.bossLevel,
+            currentBoss: data.gameState.currentBoss,
+            maxBossHp: data.gameState.maxBossHp,
+            bossHp: data.gameState.bossHp,
+            wins: data.gameState.wins,
+            nextBossAttackAt: 0
+          };
+          console.log("🎮 GAME CREATED:", this.gameState);
+        }
+        this.ensureAI();
+        this.broadcastRoomState();
+        return;
+      }
+
+      if (data.type === "join") {
+        if (this.players.has(connection.id)) return;
+
+        let maxHp = 100;
+        if (data.class === "TANK") maxHp = 220;
+        else if (data.class === "WARRIOR") maxHp = 150;
+        else if (data.class === "ARCHER") maxHp = 90;
+        else if (data.class === "MAGE") maxHp = 85;
+        else if (data.class === "PRIEST") maxHp = 80;
+
+        const player = {
+          id: connection.id,
+          name: data.name || "Player",
+          class: data.class || "WARRIOR",
+          position: this.players.size,
+          level: 1,
+          xp: 0,
+          maxHp: maxHp,
+          hp: maxHp,
+          totalDamage: 0,
+          healing: 0,
+          alive: true,
+          taunt: false
+        };
+
+        this.players.set(connection.id, player);
+        this.broadcast(JSON.stringify({ type: "playerJoined", player: player }), [connection.id]);
+        this.sendRoomState(connection);
+        console.log("⚔️ PLAYER JOINED:", player.name, player.class);
+        return;
+      }
+
+      if (data.type === "attack") {
+        const player = this.players.get(connection.id);
+        if (!player || !this.gameState || this.gameState.bossHp <= 0 || !player.alive) return;
+
+        let attackChance;
+        if (player.class === "TANK") attackChance = 1.00;
+        else if (player.class === "WARRIOR") attackChance = 0.90;
+        else if (player.class === "ARCHER") attackChance = 0.80;
+        else if (player.class === "MAGE") attackChance = 0.70;
+        else attackChance = 1.00;
+
+        if (Math.random() > attackChance) {
+          this.broadcast(JSON.stringify({
+            type: "attackResult",
+            playerId: player.id,
+            name: player.name,
+            hit: false,
+            damage: 0,
+            critical: false,
+            bossHp: this.gameState.bossHp,
+            maxBossHp: this.gameState.maxBossHp
+          }));
+          return;
+        }
+
+        let minDamage = 0, maxDamage = 0;
+        if (player.class === "TANK") { minDamage = 25; maxDamage = 45; }
+        else if (player.class === "WARRIOR") { minDamage = 50; maxDamage = 80; }
+        else if (player.class === "ARCHER") { minDamage = 35; maxDamage = 65; }
+        else if (player.class === "MAGE") { minDamage = 80; maxDamage = 130; }
+        else return;
+
+        let damage = Math.floor(Math.random() * (maxDamage - minDamage + 1)) + minDamage;
+        damage = Math.floor(damage * (1 + (player.level - 1) * 0.08));
+        const critical = Math.random() < 0.11;
+        if (critical) damage *= 2;
+        damage = Math.min(damage, this.gameState.bossHp);
+
+        this.gameState.bossHp -= damage;
+        player.totalDamage += damage;
+        this.players.set(connection.id, player);
+
+        this.broadcast(JSON.stringify({
+          type: "attackResult",
+          playerId: player.id,
+          name: player.name,
+          class: player.class,
+          hit: true,
+          damage: damage,
+          critical: critical,
+          bossHp: this.gameState.bossHp,
+          maxBossHp: this.gameState.maxBossHp,
+          totalDamage: player.totalDamage,
+          level: player.level
+        }));
+        return;
+      }
+
+      if (data.type === "bossAttack") {
+        if (!this.gameState || this.gameState.bossHp <= 0) return;
+
+        const now = Date.now();
+        const nextBossAttackAt = Number(this.gameState.nextBossAttackAt || 0);
+        if (now < nextBossAttackAt) return;
+
+        const alivePlayers = [...this.players.values()].filter(player => player.alive);
+        if (alivePlayers.length === 0) return;
+
+        const tauntPlayers = alivePlayers.filter(player => player.taunt === true);
+        let target;
+        if (tauntPlayers.length > 0) {
+          target = tauntPlayers[Math.floor(Math.random() * tauntPlayers.length)];
+        } else {
+          const targetWeights = { "TANK": 40, "WARRIOR": 25, "ARCHER": 18, "MAGE": 12, "PRIEST": 5 };
+          const weightedPlayers = [];
+          alivePlayers.forEach(player => {
+            const weight = targetWeights[player.class] || 1;
+            for (let i = 0; i < weight; i++) {
+              weightedPlayers.push(player);
+            }
+          });
+          target = weightedPlayers[Math.floor(Math.random() * weightedPlayers.length)];
+        }
+
+        if (!target) return;
+
+        const bossSpells = [
+          ["💥", "DEMON STRIKE", 45],
+          ["🔥", "HELLFIRE", 55],
+          ["⚡", "DARK LIGHTNING", 60],
+          ["👻", "SOUL RIP", 50]
+        ];
+        const spell = bossSpells[Math.floor(Math.random() * bossSpells.length)];
+
+        let damage = Math.floor(spell[2] * (1 + this.gameState.bossLevel * 0.10));
+        if (this.gameState.bossLevel > 20) {
+          damage = Math.floor(damage * (1 + (this.gameState.bossLevel - 20) * 0.05));
+        }
+        if (this.gameState.currentBoss?.special) {
+          damage = Math.floor(damage * 1.5);
+        }
+        if (this.gameState.bossHp <= this.gameState.maxBossHp * 0.25) {
+          damage = Math.floor(damage * 1.5);
+        }
+        if (target.class === "TANK") {
+          damage = Math.floor(damage * 0.65);
+        }
+        damage = Math.min(damage, target.hp);
+
+        target.hp -= damage;
+        if (target.hp <= 0) {
+          target.hp = 0;
+          target.alive = false;
+        }
+        this.players.set(target.id, target);
+
+        let attackSpeed = 5000 - (this.gameState.bossLevel - 1) * 40;
+        attackSpeed = Math.max(2500, attackSpeed);
+        if (this.gameState.bossHp <= this.gameState.maxBossHp * 0.25) {
+          attackSpeed = Math.floor(attackSpeed * 0.70);
+        }
+        this.gameState.nextBossAttackAt = Date.now() + attackSpeed;
+
+        this.broadcast(JSON.stringify({
+          type: "bossAttackResult",
+          targetId: target.id,
+          targetName: target.name,
+          targetClass: target.class,
+          spellIcon: spell[0],
+          spellName: spell[1],
+          damage: damage,
+          hp: target.hp,
+          maxHp: target.maxHp,
+          alive: target.alive
+        }));
+
+        const aliveAfterBossAttack = [...this.players.values()].filter(player => player.alive);
+        if (aliveAfterBossAttack.length === 0) {
+          this.scheduleGameReset();
+        }
+
+        console.log("👹 BOSS ATTACK:", target.name, "-", damage, "HP");
+        return;
+      }
+
+      if (data.type === "nextBoss") {
+        if (!this.gameState) return;
+        const expectedBossLevel = this.gameState.bossLevel + 1;
+        if (Number(data.bossLevel) !== expectedBossLevel) return;
+        if (!data.currentBoss || !data.currentBoss.name || !data.currentBoss.icon || !data.currentBoss.hp) return;
+
+        this.gameState = {
+          bossLevel: Number(data.bossLevel),
+          currentBoss: data.currentBoss,
+          maxBossHp: Number(data.maxBossHp) || Number(data.currentBoss.hp),
+          bossHp: Number(data.bossHp) || Number(data.currentBoss.hp),
+          wins: this.gameState.wins,
+          nextBossAttackAt: 0
+        };
+
+        console.log("👑 NEXT BOSS OFFICIAL:", this.gameState.bossLevel, this.gameState.currentBoss.name);
+        this.broadcastRoomState();
+        return;
+      }
+
+      if (data.type === "resetGame") {
+        if (this.resetTimer) {
+          clearTimeout(this.resetTimer);
+          this.resetTimer = null;
+        }
+
+        this.ensureAI();
+        for (const [id, player] of this.players) {
+          if (player.isAI) continue;
+          const stats = this.getClassStats(player.class);
+          player.maxHp = stats.maxHp;
+          player.hp = stats.maxHp;
+          player.alive = true;
+          player.taunt = false;
+          player.totalDamage = 0;
+          player.healing = 0;
+          player.level = 1;
+          player.xp = 0;
+          this.players.set(id, player);
+        }
+
+        const resetBoss = data.gameState?.currentBoss || this.gameState?.currentBoss;
+        const resetLevel = Number(data.gameState?.bossLevel) || 1;
+        const resetMaxHp = Number(data.gameState?.maxBossHp) || Number(resetBoss?.hp) || 10000;
+
+        this.gameState = {
+          bossLevel: resetLevel,
+          currentBoss: resetBoss,
+          maxBossHp: resetMaxHp,
+          bossHp: resetMaxHp,
+          wins: 0,
+          nextBossAttackAt: 0
+        };
+
+        const ai = this.players.get("AI-1");
+        if (ai) {
+          const newClass = this.getRandomAIClass();
+          const stats = this.getClassStats(newClass);
+          ai.position = 0;
+          ai.class = newClass;
+          ai.maxHp = stats.maxHp;
+          ai.hp = stats.maxHp;
+          ai.alive = true;
+          ai.taunt = false;
+          ai.totalDamage = 0;
+          ai.healing = 0;
+          ai.level = 1;
+          ai.xp = 0;
+          ai.isAI = true;
+          this.players.set("AI-1", ai);
+        }
+
+        if (this.botTimer) {
+          clearTimeout(this.botTimer);
+          this.botTimer = null;
+        }
+        this.scheduleAIAttack();
+
+        this.broadcast(JSON.stringify({
+          type: "roomState",
+          reset: true,
+          players: this.getOrderedPlayers(),
+          gameState: this.gameState
+        }));
+        return;
+      }
+
     } catch (error) {
       console.error("❌ MESSAGE ERROR:", error);
     }
@@ -494,7 +875,6 @@ export default {
   async fetch(request: Request, env: any) {
     const url = new URL(request.url);
 
-    // Rota para iniciar OAuth
     if (url.pathname === "/twitch/login") {
       try {
         const id = env.Chat.idFromName("bossfight");
@@ -510,11 +890,10 @@ export default {
       }
     }
 
-    // Callback do OAuth
     if (url.pathname === "/twitch/callback") {
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
-      
+
       if (!code || !state) {
         return new Response("Parâmetros ausentes", { status: 400 });
       }
@@ -536,11 +915,9 @@ export default {
       }
     }
 
-    // PartyKit routing
     const response = await routePartykitRequest(request, { ...env });
     if (response) return response;
 
-    // Assets (seu HTML)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
