@@ -973,7 +973,17 @@ export default {
         );
       }
     }
-
+// No fetch, ANTES do routePartykitRequest
+if (url.pathname === "/auth/twitch") {
+  try {
+    const id = env.Chat.idFromName("bossfight");
+    const stub = env.Chat.get(id);
+    const twitchUrl = await stub.startTwitchOAuth();
+    return Response.redirect(twitchUrl, 302);
+  } catch (error) {
+    return new Response(`Erro: ${error}`, { status: 500 });
+  }
+}
     // DEPOIS: PartyKit e Assets (MENOS ESPECÍFICOS)
     const response = await routePartykitRequest(request, { ...env });
     if (response) return response;
