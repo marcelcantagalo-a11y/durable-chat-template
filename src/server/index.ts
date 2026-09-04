@@ -103,7 +103,15 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    if(!this.getClassStats(ai.class)){
+    const validClasses = [
+      "TANK",
+      "WARRIOR",
+      "ARCHER",
+      "MAGE",
+      "PRIEST"
+    ];
+
+    if(!validClasses.includes(ai.class)){
       ai.class = this.getRandomAIClass();
     }
 
@@ -151,13 +159,13 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    const humanPlayers = [
+    const livingPlayers = [
       ...this.players.values()
     ].filter(
-      player => !player.isAI && player.alive
+      player => player.alive
     );
 
-    if(humanPlayers.length === 0){
+    if(livingPlayers.length === 0){
       return;
     }
 
@@ -178,8 +186,8 @@ export class Chat extends Server<Env> {
 
     // Priest é suporte: cura um jogador vivo que esteja ferido.
     if(ai.class === "PRIEST"){
-      const damagedPlayers = humanPlayers.filter(
-        player => player.hp < player.maxHp
+      const damagedPlayers = livingPlayers.filter(
+        player => !player.isAI && player.hp < player.maxHp
       );
 
       if(damagedPlayers.length === 0){
@@ -1883,15 +1891,28 @@ export class Chat extends Server<Env> {
 
         if(data.type === "resetGame"){
 
-            for(const [id, player] of this.players){
+            this.ensureAI();
 
-                if(!player.isAI){
-                    this.players.delete(id);
+            // Reinicia todos os jogadores existentes.
+            // A IA recebe uma nova classe aleatória abaixo.
+            for(const [id, player] of this.players){
+                if(player.isAI){
+                    continue;
                 }
 
-            }
+                const stats = this.getClassStats(player.class);
 
-            this.ensureAI();
+                player.maxHp = stats.maxHp;
+                player.hp = stats.maxHp;
+                player.alive = true;
+                player.taunt = false;
+                player.totalDamage = 0;
+                player.healing = 0;
+                player.level = 1;
+                player.xp = 0;
+
+                this.players.set(id, player);
+            }
 
             const resetBoss =
                 data.gameState?.currentBoss ||
