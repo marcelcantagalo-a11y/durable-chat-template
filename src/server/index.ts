@@ -384,19 +384,37 @@ export class Chat extends Server<Env> {
 
       socket.addEventListener("open", () => {
         console.log("🟣 WebSocket Twitch aberto");
-        socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
-        socket.send(`PASS oauth:${token}\r\n`);
-        socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
-        socket.send("JOIN #bossfightlivearena\r\n");
-        console.log("🟣 Twitch chat conectado com sucesso!");
+        
+        // Envia os comandos um por um com delay
+        setTimeout(() => {
+          socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
+          console.log("📤 CAP REQ enviado");
+        }, 100);
+        
+        setTimeout(() => {
+          socket.send(`PASS oauth:${token}\r\n`);
+          console.log("📤 PASS enviado");
+        }, 200);
+        
+        setTimeout(() => {
+          socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
+          console.log("📤 NICK enviado:", String(login).toLowerCase());
+        }, 300);
+        
+        setTimeout(() => {
+          socket.send("JOIN #bossfightlivearena\r\n");
+          console.log("📤 JOIN enviado para #bossfightlivearena");
+        }, 400);
       });
 
       socket.addEventListener("message", (event: MessageEvent) => {
-        this.handleTwitchMessage(String(event.data));
+        const data = String(event.data);
+        console.log("📨 RAW TWITCH:", data);
+        this.handleTwitchMessage(data);
       });
 
-      socket.addEventListener("close", () => {
-        console.log("🔴 Twitch chat desconectado");
+      socket.addEventListener("close", (event) => {
+        console.log(`🔴 Twitch chat desconectado - Código: ${event.code} - Motivo: ${event.reason || "sem motivo"}`);
         this.twitchSocket = null;
         this.scheduleTwitchReconnect();
       });
@@ -431,6 +449,7 @@ export class Chat extends Server<Env> {
       if (line.startsWith("PING")) {
         if (this.twitchSocket) {
           this.twitchSocket.send("PONG :tmi.twitch.tv\r\n");
+          console.log("📤 PONG enviado");
         }
         continue;
       }
@@ -550,7 +569,7 @@ export class Chat extends Server<Env> {
       clearTimeout(this.botTimer);
       this.botTimer = null;
     }
-    this.scheduleAIAttack(1000); // Começa após 1 segundo
+    this.scheduleAIAttack(1000);
     
     // Conecta ao Twitch
     this.connectTwitchChat();
@@ -560,7 +579,6 @@ export class Chat extends Server<Env> {
     this.ensureAI();
     console.log("🟢 PLAYER CONNECTED:", connection.id);
     
-    // Se a IA não estiver rodando, inicia
     if (!this.botTimer) {
       this.scheduleAIAttack(1000);
     }
