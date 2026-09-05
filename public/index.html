@@ -3472,26 +3472,30 @@ if(data.type === "roomState"){
            O Worker já decidiu alvo, dano e HP.
         ===================================== */
 
-        else if(data.type === "bossAttackResult"){
+else if(data.type === "bossAttackResult"){
 
-console.log(`👹 BOSS ATACOU: ${data.targetName} - ${data.damage} HP (HP restante: ${data.hp})`);
-           
-            const targetPlayer =
-                players.find(
-                    player =>
-                        player.remoteId ===
-                        data.targetId
-                );
+    // Encontra o jogador alvo
+    const targetPlayer = players.find(
+        player => player.remoteId === data.targetId
+    );
 
-            if(!targetPlayer){
-                return;
-            }
+    if(!targetPlayer){
+        return;
+    }
 
-            const wasAlive = targetPlayer.alive;
+    // Guarda o HP ANTES do ataque
+    const hpAntes = targetPlayer.hp;
 
-            targetPlayer.hp = data.hp;
-            targetPlayer.maxHp = data.maxHp;
-            targetPlayer.alive = data.alive;
+    // Atualiza com os dados do servidor
+    targetPlayer.hp = data.hp;
+    targetPlayer.maxHp = data.maxHp;
+    targetPlayer.alive = data.alive;
+
+    // Logs com HP antes e depois
+    console.log(`🔍 ${data.targetName} - HP ANTES: ${hpAntes}, DANO: ${data.damage}, HP DEPOIS: ${data.hp}`);
+
+    // ... resto do código (efeitos visuais, etc.)
+}
 
             /* =====================================
                💀 CHECK GAME OVER — OFFICIAL BOSS HIT
