@@ -8619,54 +8619,50 @@ function startPlayerEntries(){
 
 function startPlayerAI(player){
 
+    console.log("🚀 startPlayerAI chamado para:", player.name, "speed:", player.speed, "alive:", player.alive, "classe:", player.class);
+
     function nextAction(){
 
         if(!player.alive){
-
+            console.log("⏳ Jogador morto, aguardando...", player.name);
             setTimeout(
                 nextAction,
                 500
             );
-
             return;
-
         }
-
 
         if(battlePaused){
-
+            console.log("⏳ Batalha pausada, aguardando...", player.name);
             setTimeout(
                 nextAction,
                 500
             );
-
             return;
-
         }
 
+        console.log("⚔️ Executando ação para:", player.name, "classe:", player.class);
 
         if(player.class === "PRIEST"){
-
             healerAction(player);
-
         }else{
-
             playerAttack(player);
-
         }
 
-
+        // Fallback: se speed for 0 ou undefined, usa 1000ms
+        const attackSpeed = player.speed || 1000;
         setTimeout(
             nextAction,
-            player.speed
+            attackSpeed
         );
 
     }
 
-
+    // Fallback no primeiro timeout também
+    const initialDelay = player.speed || 1000;
     setTimeout(
         nextAction,
-        player.speed
+        initialDelay
     );
 
 }
