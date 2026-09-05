@@ -3040,118 +3040,114 @@ multiplayerSocket.onmessage = (event) => {
 
         else if(data.type === "playerJoined"){
 
-            const remotePlayer =
-                data.player;
+    const remotePlayer =
+        data.player;
 
+    const alreadyExists =
+        players.some(
+            player =>
+                player.remoteId ===
+                remotePlayer.id
+        );
 
-            const alreadyExists =
-                players.some(
-                    player =>
-                        player.remoteId ===
-                        remotePlayer.id
-                );
+    if(alreadyExists){
+        return;
+    }
 
+    const classData =
+        classes.find(
+            c =>
+                c.name ===
+                remotePlayer.class
+        );
 
-            if(alreadyExists){
-                return;
-            }
+    if(!classData){
+        return;
+    }
 
+    const newRemotePlayer = {
 
-            const classData =
-                classes.find(
-                    c =>
-                        c.name ===
-                        remotePlayer.class
-                );
+        id:
+            nextPlayerId++,
 
+        remoteId:
+            remotePlayer.id,
 
-            if(!classData){
-                return;
-            }
+        serverPosition:
+            remotePlayer.position,
 
+        name:
+            remotePlayer.name,
 
-            const newRemotePlayer = {
+        class:
+            remotePlayer.class,
 
-                id:
-                    nextPlayerId++,
+        icon:
+            classIcons[
+                remotePlayer.class
+            ],
 
-                remoteId:
-                    remotePlayer.id,
+        damage:[
+            classData.damage[0],
+            classData.damage[1]
+        ],
 
-                serverPosition:
-                    remotePlayer.position,
+        speed:
+            classData.speed,
 
-                name:
-                    remotePlayer.name,
+        level:1,
 
-                class:
-                    remotePlayer.class,
+        xp:0,
 
-                icon:
-                    classIcons[
-                        remotePlayer.class
-                    ],
+        nextXp:100,
 
-                damage:[
-                    classData.damage[0],
-                    classData.damage[1]
-                ],
+        maxHp:
+            classData.hp,
 
-                speed:
-                    classData.speed,
+        hp:
+            classData.hp,
 
-                level:1,
+        alive:true,
 
-                xp:0,
+        totalDamage:0,
 
-                nextXp:100,
+        healing:0,
 
-                maxHp:
-                    classData.hp,
+        isAI:
+            remotePlayer.isAI === true
 
-                hp:
-                    classData.hp,
+    };
 
-                alive:true,
+    players.push(
+        newRemotePlayer
+    );
 
-                totalDamage:0,
+    createPlayerUI(
+        newRemotePlayer
+    );
 
-                healing:0,
+    // ===== INICIA O ATAQUE AUTOMÁTICO PARA JOGADORES HUMANOS =====
+    if (!newRemotePlayer.isAI) {
+        startPlayerAI(newRemotePlayer);
+        console.log("⚔️ ATAQUE INICIADO PARA:", newRemotePlayer.name);
+    }
 
-                isAI:
-                    remotePlayer.isAI === true
+    eventBox.textContent =
+        newRemotePlayer.icon +
+        " " +
+        newRemotePlayer.name +
+        " joined the battle!";
 
-            };
+    addEvent(
+        newRemotePlayer.icon +
+        " " +
+        newRemotePlayer.name +
+        " joined!"
+    );
 
+    update();
 
-            players.push(
-                newRemotePlayer
-            );
-
-
-            createPlayerUI(
-                newRemotePlayer
-            );
-
-
-            eventBox.textContent =
-                newRemotePlayer.icon +
-                " " +
-                newRemotePlayer.name +
-                " joined the battle!";
-
-
-            addEvent(
-                newRemotePlayer.icon +
-                " " +
-                newRemotePlayer.name +
-                " joined!"
-            );
-
-
-            update();
-
-        }
+}
 
 
         /* =====================================
