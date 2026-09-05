@@ -862,11 +862,16 @@ export class Chat extends Server<Env> {
         }
         damage = Math.min(damage, target.hp);
 
-        target.hp -= damage;
-        if (target.hp <= 0) {
-          target.hp = 0;
-          target.alive = false;
-        }
+console.log(`💥 Dano bruto: ${damage} | HP do alvo: ${target.hp} (${target.name})`);
+
+target.hp -= damage;
+
+console.log(`💥 HP restante: ${target.hp}`);
+
+if (target.hp <= 0) {
+    target.hp = 0;
+    target.alive = false;
+}
         this.players.set(target.id, target);
 
         let attackSpeed = 5000 - (this.gameState.bossLevel - 1) * 40;
