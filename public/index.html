@@ -2996,7 +2996,7 @@ multiplayerSocket.onmessage = (event) => {
 
             update();
 
-        } // FIM DO if(data.type === "roomState")
+        } // FIM DO roomState
 
         /* =====================================
            ⚔️ NOVO JOGADOR ENTROU
@@ -3724,9 +3724,7 @@ multiplayerSocket.onmessage = (event) => {
 
         }
 
-    } // FIM DO TRY
-
-    catch (error) {
+    } catch (error) {
 
         console.error(
             "❌ MULTIPLAYER MESSAGE ERROR:",
