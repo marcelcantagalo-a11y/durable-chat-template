@@ -23,54 +23,181 @@ export class Chat extends Server<Env> {
     return stats[className] || stats.WARRIOR;
   }
 
-getRandomAIClass() {
+  // 🔥 SEMPRE RETORNA "TANK"
+  getRandomAIClass() {
     return "TANK";
-}
+  }
 
-ensureAI() {
+  ensureAI() {
     const aiId = "AI-1";
     // Remove IAs antigas que não sejam a principal
     for (const [id, player] of this.players) {
-        if (player.isAI && id !== aiId) {
-            this.players.delete(id);
-        }
+      if (player.isAI && id !== aiId) {
+        this.players.delete(id);
+      }
     }
 
     let ai = this.players.get(aiId);
     if (!ai) {
-        // Cria uma nova IA (sempre TANK, pois getRandomAIClass retorna "TANK")
-        const aiClass = this.getRandomAIClass();
-        const stats = this.getClassStats(aiClass);
-        ai = {
-            id: aiId,
-            name: "Arena AI",
-            class: aiClass,
-            position: 0,
-            level: 1,
-            xp: 0,
-            maxHp: stats.maxHp,
-            hp: stats.maxHp,
-            totalDamage: 0,
-            healing: 0,
-            alive: true,
-            taunt: false,
-            isAI: true
-        };
-        this.players.set(aiId, ai);
-        console.log("🤖 IA CRIADA (TANK):", ai.class);
+      // Cria uma nova IA (sempre TANK)
+      const aiClass = this.getRandomAIClass();
+      const stats = this.getClassStats(aiClass);
+      ai = {
+        id: aiId,
+        name: "Arena AI",
+        class: aiClass,
+        position: 0,
+        level: 1,
+        xp: 0,
+        maxHp: stats.maxHp,
+        hp: stats.maxHp,
+        totalDamage: 0,
+        healing: 0,
+        alive: true,
+        taunt: false,
+        isAI: true
+      };
+      this.players.set(aiId, ai);
+      console.log("🤖 IA CRIADA (TANK):", ai.class);
     } else if (ai.class !== "TANK") {
-        // Se a IA já existe mas não é TANK, força a mudança
-        console.log("🔄 FORÇANDO IA PARA TANK (era", ai.class, ")");
-        const stats = this.getClassStats("TANK");
-        ai.class = "TANK";
-        ai.maxHp = stats.maxHp;
-        if (ai.alive) {
-            ai.hp = stats.maxHp;
-        }
-        this.players.set(aiId, ai);
+      // Se a IA já existe mas não é TANK, força a mudança
+      console.log("🔄 FORÇANDO IA PARA TANK (era", ai.class, ")");
+      const stats = this.getClassStats("TANK");
+      ai.class = "TANK";
+      ai.maxHp = stats.maxHp;
+      if (ai.alive) {
+        ai.hp = stats.maxHp;
+      }
+      this.players.set(aiId, ai);
     }
     return ai;
-}
+  }
+
+  scheduleAIAttack(delay?: number) {
+    if (this.botTimer) {
+      clearTimeout(this.botTimer);
+      this.botTimer = null;
+    }
+
+    const ai = this.players.get("AI-1");
+    const stats = ai ? this.getClassStats(ai.class) : this.getClassStats("TANK");
+    const wait = typeof delay === "number" ? delay : stats.speed;
+
+    this.botTimer = setTimeout(() => {
+      this.botTimer = null;
+      this.aiAttack();
+      this.scheduleAIAttack();
+    }, wait);
+    
+    console.log("⏱️ PRÓXIMO ATAQUE IA EM:", wait, "ms");
+  }
+
+  aiAttack() {
+    console.log("🤖 IA ATACANDO...");
+    
+    if (!this.gameState) {
+      console.log("❌ Sem gameState");
+      return;
+    }
+    
+    if (this.gameState.bossHp <= 0) {
+      console.log("❌ Boss já morreu");
+      return;
+    }
+
+    const livingPlayers = [...this.players.values()].filter(player => player.alive);
+    if (livingPlayers.length === 0) {
+      console.log("❌ Sem jogadores vivos");
+      return;
+    }
+
+    const ai = this.players.get("AI-1");
+    if (!ai) {
+      console.log("❌ IA não encontrada");
+      return;
+    }
+
+    if (!ai.alive || ai.hp <= 0) {
+      console.log("❌ IA está morta");
+      return;
+    }
+
+    // 🔥 Garantia extra: se a IA não for TANK, força a correção e chama novamente
+    if (ai.class !== "TANK") {
+      console.log("⚠️ IA não é TANK, forçando...");
+      const stats = this.getClassStats("TANK");
+      ai.class = "TANK";
+      ai.maxHp = stats.maxHp;
+      if (ai.alive) ai.hp = stats.maxHp;
+      this.players.set(ai.id, ai);
+      // Chama novamente com a IA corrigida
+      this.aiAttack();
+      return;
+    }
+
+    const stats = this.getClassStats(ai.class);
+    console.log("🤖 IA CLASSE:", ai.class);
+
+    // (Se fosse PRIEST, curaria, mas como é sempre TANK, essa parte não será usada)
+    // Mantenho o código para compatibilidade, mas nunca será executado.
+    if (ai.class === "PRIEST") {
+      const damagedPlayers = livingPlayers.filter(
+        player => !player.isAI && player.hp < player.maxHp
+      );
+      if (damagedPlayers.length === 0) return;
+      
+      damagedPlayers.sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
+      const target = damagedPlayers[0];
+
+      let heal = Math.floor(Math.random() * 16) + 15 + ai.level * 2;
+      const healingPower = typeof ai.healingPower === "number" ? ai.healingPower : 1;
+      heal = Math.floor(heal * healingPower);
+      heal = Math.min(heal, target.maxHp - target.hp);
+      
+      if (heal <= 0) return;
+
+      target.hp += heal;
+      ai.healing += heal;
+      this.players.set(target.id, target);
+      this.players.set(ai.id, ai);
+
+      this.broadcast(JSON.stringify({
+        type: "healResult",
+        healerId: ai.id,
+        healerName: ai.name,
+        healerClass: ai.class,
+        targetId: target.id,
+        targetName: target.name,
+        heal: heal,
+        hp: target.hp,
+        maxHp: target.maxHp,
+        alive: target.alive,
+        healerHealing: ai.healing,
+        isAI: true
+      }));
+      console.log("💚 IA CUROU:", target.name, "+", heal);
+      return;
+    }
+
+    // Ataque normal (TANK)
+    if (Math.random() > stats.accuracy) {
+      this.broadcast(JSON.stringify({
+        type: "attackResult",
+        playerId: ai.id,
+        name: ai.name,
+        class: ai.class,
+        hit: false,
+        damage: 0,
+        critical: false,
+        bossHp: this.gameState.bossHp,
+        maxBossHp: this.gameState.maxBossHp,
+        totalDamage: ai.totalDamage,
+        level: ai.level,
+        isAI: true
+      }));
+      console.log("❌ IA ERROU");
+      return;
+    }
 
     let damage = Math.floor(Math.random() * (stats.maxDamage - stats.minDamage + 1)) + stats.minDamage;
     damage = Math.floor(damage * (1 + (ai.level - 1) * 0.08));
@@ -124,7 +251,7 @@ ensureAI() {
     if (this.resetTimer) return;
     this.resetTimer = setTimeout(() => {
       this.resetTimer = null;
-      this.);
+      this.ensureAI();
       for (const [id, player] of this.players) {
         if (player.isAI) continue;
         const stats = this.getClassStats(player.class);
@@ -140,7 +267,7 @@ ensureAI() {
       }
       const ai = this.players.get("AI-1");
       if (ai) {
-        const newClass = this.getRandomAIClass();
+        const newClass = this.getRandomAIClass(); // "TANK"
         const stats = this.getClassStats(newClass);
         ai.position = 0;
         ai.class = newClass;
@@ -498,7 +625,7 @@ ensureAI() {
     }
   }
 
-  // ========== ADICIONA JOGADOR DA TWITCH (CORRIGIDO) ==========
+  // ========== ADICIONA JOGADOR DA TWITCH ==========
   async addTwitchPlayer(twitchUserId: string, twitchName: string) {
     if (!twitchUserId) {
       return { ok: false, reason: "missing-user-id" };
@@ -590,9 +717,9 @@ ensureAI() {
     this.scheduleAIAttack(1000);
 
     this.connectTwitchChat();
-}
+  }
 
-onConnect(connection: Connection) {
+  onConnect(connection: Connection) {
     this.ensureAI();
     console.log("🟢 PLAYER CONNECTED:", connection.id);
 
@@ -601,7 +728,7 @@ onConnect(connection: Connection) {
     }
 
     this.sendRoomState(connection);
-}
+  }
 
   onMessage(connection: Connection, message: WSMessage) {
     try {
@@ -768,16 +895,16 @@ onConnect(connection: Connection) {
         }
         damage = Math.min(damage, target.hp);
 
-console.log(`💥 Dano bruto: ${damage} | HP do alvo: ${target.hp} (${target.name})`);
+        console.log(`💥 Dano bruto: ${damage} | HP do alvo: ${target.hp} (${target.name})`);
 
-target.hp -= damage;
+        target.hp -= damage;
 
-console.log(`💥 HP restante: ${target.hp}`);
+        console.log(`💥 HP restante: ${target.hp}`);
 
-if (target.hp <= 0) {
-    target.hp = 0;
-    target.alive = false;
-}
+        if (target.hp <= 0) {
+          target.hp = 0;
+          target.alive = false;
+        }
         this.players.set(target.id, target);
 
         let attackSpeed = 5000 - (this.gameState.bossLevel - 1) * 40;
