@@ -382,7 +382,6 @@ export class Chat extends Server<Env> {
 
     // SALVA O REFRESH TOKEN E O ACCESS TOKEN
     await this.ctx.storage.put("twitch_access_token", tokenData.access_token);
-    // IMPORTANTE: A Twitch pode não retornar refresh_token em alguns fluxos, mas aqui deve vir
     if (tokenData.refresh_token) {
       await this.ctx.storage.put("twitch_refresh_token", tokenData.refresh_token);
     } else {
@@ -390,7 +389,6 @@ export class Chat extends Server<Env> {
     }
     await this.ctx.storage.put("twitch_bot_login", twitchUser.login);
     await this.ctx.storage.put("twitch_enabled", true);
-    // Define expiração para ~4 horas (valor típico da Twitch)
     await this.ctx.storage.put("twitch_token_expires_at", Date.now() + 4 * 60 * 60 * 1000);
 
     console.log("✅ Token salvo com sucesso. Refresh token presente:", !!tokenData.refresh_token);
@@ -399,15 +397,13 @@ export class Chat extends Server<Env> {
     return true;
   }
 
-  // ========== MÉTODO PRINCIPAL COM RENOVAÇÃO AUTOMÁTICA MELHORADA ==========
+  // ========== MÉTODO PRINCIPAL COM RENOVAÇÃO AUTOMÁTICA ==========
   private async connectTwitchChat() {
-    // Se já estiver conectado, não faz nada
     if (this.twitchSocket && this.twitchConnected) {
       console.log("🟣 Twitch chat já está conectado");
       return;
     }
 
-    // Limpa timers de retry anteriores
     if (this.refreshRetryTimer) {
       clearTimeout(this.refreshRetryTimer);
       this.refreshRetryTimer = null;
@@ -424,11 +420,10 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    // Verifica se o token expirou ou está perto de expirar
     let needsRefresh = false;
     if (token && expiresAt) {
       const timeUntilExpiry = Number(expiresAt) - Date.now();
-      if (timeUntilExpiry < 5 * 60 * 1000) { // menos de 5 minutos
+      if (timeUntilExpiry < 5 * 60 * 1000) {
         console.log(`⏳ Token expira em ${Math.round(timeUntilExpiry / 60000)} minutos. Renovando...`);
         needsRefresh = true;
       }
@@ -436,7 +431,6 @@ export class Chat extends Server<Env> {
       needsRefresh = true;
     }
 
-    // Se precisar renovar e tiver refresh token, tenta
     if (needsRefresh && refreshToken) {
       try {
         const env = this.getWorkerEnv();
@@ -456,7 +450,6 @@ export class Chat extends Server<Env> {
         if (!response.ok) {
           const errorText = await response.text();
           console.error("❌ Falha ao renovar token:", errorText);
-          // Se falhar por token inválido, limpa os tokens para forçar reautorização
           if (response.status === 400 && errorText.includes("invalid refresh token")) {
             console.warn("⚠️ Refresh token inválido. Será necessário reautorizar.");
             await this.ctx.storage.delete("twitch_access_token");
@@ -464,7 +457,6 @@ export class Chat extends Server<Env> {
             await this.ctx.storage.delete("twitch_token_expires_at");
             token = null;
           } else {
-            // Outro erro: tenta novamente em 30 segundos
             console.log("🔄 Agendando nova tentativa de refresh em 30 segundos...");
             this.refreshRetryTimer = setTimeout(() => {
               this.refreshRetryTimer = null;
@@ -476,7 +468,6 @@ export class Chat extends Server<Env> {
           const data: any = await response.json();
           token = data.access_token;
           await this.ctx.storage.put("twitch_access_token", token);
-          // A Twitch pode ou não retornar um novo refresh_token; se retornar, atualiza
           if (data.refresh_token) {
             await this.ctx.storage.put("twitch_refresh_token", data.refresh_token);
           }
@@ -485,7 +476,6 @@ export class Chat extends Server<Env> {
         }
       } catch (error) {
         console.error("❌ Erro ao renovar token:", error);
-        // Tenta novamente em 30 segundos
         console.log("🔄 Agendando nova tentativa de refresh em 30 segundos...");
         this.refreshRetryTimer = setTimeout(() => {
           this.refreshRetryTimer = null;
@@ -495,7 +485,6 @@ export class Chat extends Server<Env> {
       }
     }
 
-    // Se ainda não tem token, pede re-autorização
     if (!token) {
       console.log("⚠️ Token inválido ou expirado. Reautorize o Twitch em: /twitch/login");
       return;
@@ -505,7 +494,6 @@ export class Chat extends Server<Env> {
     try {
       console.log("🟣 Conectando ao Twitch chat...");
       
-      // Fecha socket antigo se existir
       if (this.twitchSocket) {
         try { this.twitchSocket.close(); } catch {}
         this.twitchSocket = null;
@@ -518,12 +506,10 @@ export class Chat extends Server<Env> {
 
       socket.addEventListener("open", () => {
         console.log("🟣 WebSocket Twitch aberto - enviando comandos...");
-        
         socket.send("CAP REQ :twitch.tv/tags twitch.tv/commands\r\n");
         socket.send(`PASS oauth:${token}\r\n`);
         socket.send(`NICK ${String(login).toLowerCase()}\r\n`);
         socket.send("JOIN #bossfightlivearena\r\n");
-        
         console.log("📤 Comandos enviados: CAP, PASS, NICK, JOIN");
         this.twitchConnected = true;
       });
@@ -560,7 +546,6 @@ export class Chat extends Server<Env> {
     console.log("🔄 Agendando reconexão Twitch em 10 segundos...");
     this.twitchReconnectTimer = setTimeout(() => {
       this.twitchReconnectTimer = null;
-      // Tenta reconectar chamando connectTwitchChat, que também tenta refresh se necessário
       this.connectTwitchChat();
     }, 10000);
   }
@@ -612,6 +597,7 @@ export class Chat extends Server<Env> {
     }
   }
 
+  // ========== ADICIONA JOGADOR DA TWITCH (CORRIGIDO) ==========
   async addTwitchPlayer(twitchUserId: string, twitchName: string) {
     if (!twitchUserId) {
       return { ok: false, reason: "missing-user-id" };
@@ -655,9 +641,22 @@ export class Chat extends Server<Env> {
       healing: 0,
       alive: true,
       taunt: false,
-      isAI: false,          // <-- GARANTIDO QUE É FALSE PARA JOGADORES DA TWITCH
+      isAI: false,
       isTwitch: true
     };
+
+    this.players.set(playerId, player);
+
+    this.broadcast(JSON.stringify({
+      type: "playerJoined",
+      player
+    }));
+
+    this.broadcastRoomState();
+
+    console.log(`📺 TWITCH !PLAY: ${cleanName} (${playerClass})`);
+    return { ok: true, player };
+  }
 
   // ========== CICLO DE VIDA ==========
   onStart() {
@@ -752,21 +751,21 @@ export class Chat extends Server<Env> {
       }
 
       if (data.type === "attack") {
-    // 🔥 USA O playerId ENVIADO PELO CLIENTE
-    const playerId = data.playerId || connection.id;
-    const player = this.players.get(playerId);
-    
-    if (!player || !this.gameState || this.gameState.bossHp <= 0 || !player.alive) return;
+        // 🔥 USA O playerId ENVIADO PELO CLIENTE
+        const playerId = data.playerId || connection.id;
+        const player = this.players.get(playerId);
+        
+        if (!player || !this.gameState || this.gameState.bossHp <= 0 || !player.alive) return;
 
-    let attackChance;
-    if (player.class === "TANK") attackChance = 1.00;
-    else if (player.class === "WARRIOR") attackChance = 0.90;
-    else if (player.class === "ARCHER") attackChance = 0.80;
-    else if (player.class === "MAGE") attackChance = 0.70;
-    else attackChance = 1.00;
+        let attackChance;
+        if (player.class === "TANK") attackChance = 1.00;
+        else if (player.class === "WARRIOR") attackChance = 0.90;
+        else if (player.class === "ARCHER") attackChance = 0.80;
+        else if (player.class === "MAGE") attackChance = 0.70;
+        else attackChance = 1.00;
 
-    if (Math.random() > attackChance) {
-        this.broadcast(JSON.stringify({
+        if (Math.random() > attackChance) {
+          this.broadcast(JSON.stringify({
             type: "attackResult",
             playerId: player.id,
             name: player.name,
@@ -775,42 +774,42 @@ export class Chat extends Server<Env> {
             critical: false,
             bossHp: this.gameState.bossHp,
             maxBossHp: this.gameState.maxBossHp
+          }));
+          return;
+        }
+
+        let minDamage = 0, maxDamage = 0;
+        if (player.class === "TANK") { minDamage = 25; maxDamage = 45; }
+        else if (player.class === "WARRIOR") { minDamage = 50; maxDamage = 80; }
+        else if (player.class === "ARCHER") { minDamage = 35; maxDamage = 65; }
+        else if (player.class === "MAGE") { minDamage = 80; maxDamage = 130; }
+        else return;
+
+        let damage = Math.floor(Math.random() * (maxDamage - minDamage + 1)) + minDamage;
+        damage = Math.floor(damage * (1 + (player.level - 1) * 0.08));
+        const critical = Math.random() < 0.11;
+        if (critical) damage *= 2;
+        damage = Math.min(damage, this.gameState.bossHp);
+
+        this.gameState.bossHp -= damage;
+        player.totalDamage += damage;
+        this.players.set(playerId, player);
+
+        this.broadcast(JSON.stringify({
+          type: "attackResult",
+          playerId: player.id,
+          name: player.name,
+          class: player.class,
+          hit: true,
+          damage: damage,
+          critical: critical,
+          bossHp: this.gameState.bossHp,
+          maxBossHp: this.gameState.maxBossHp,
+          totalDamage: player.totalDamage,
+          level: player.level
         }));
         return;
-    }
-
-    let minDamage = 0, maxDamage = 0;
-    if (player.class === "TANK") { minDamage = 25; maxDamage = 45; }
-    else if (player.class === "WARRIOR") { minDamage = 50; maxDamage = 80; }
-    else if (player.class === "ARCHER") { minDamage = 35; maxDamage = 65; }
-    else if (player.class === "MAGE") { minDamage = 80; maxDamage = 130; }
-    else return;
-
-    let damage = Math.floor(Math.random() * (maxDamage - minDamage + 1)) + minDamage;
-    damage = Math.floor(damage * (1 + (player.level - 1) * 0.08));
-    const critical = Math.random() < 0.11;
-    if (critical) damage *= 2;
-    damage = Math.min(damage, this.gameState.bossHp);
-
-    this.gameState.bossHp -= damage;
-    player.totalDamage += damage;
-    this.players.set(playerId, player); // USA playerId
-
-    this.broadcast(JSON.stringify({
-        type: "attackResult",
-        playerId: player.id,
-        name: player.name,
-        class: player.class,
-        hit: true,
-        damage: damage,
-        critical: critical,
-        bossHp: this.gameState.bossHp,
-        maxBossHp: this.gameState.maxBossHp,
-        totalDamage: player.totalDamage,
-        level: player.level
-    }));
-    return;
-}
+      }
 
       if (data.type === "bossAttack") {
         if (!this.gameState || this.gameState.bossHp <= 0) return;
@@ -1008,7 +1007,6 @@ export default {
   async fetch(request: Request, env: any) {
     const url = new URL(request.url);
 
-    // Rotas do Twitch
     if (url.pathname === "/twitch/reset") {
       try {
         const id = env.Chat.idFromName("bossfight");
@@ -1070,11 +1068,9 @@ export default {
       }
     }
 
-    // PartyKit
     const response = await routePartykitRequest(request, { ...env });
     if (response) return response;
 
-    // Assets (HTML)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
