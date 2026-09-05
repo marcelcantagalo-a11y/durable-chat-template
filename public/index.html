@@ -3735,101 +3735,12 @@ multiplayerSocket.onmessage = (event) => {
 
 }; // FIM DO onmessage
 
-            const healer =
-                players.find(
-                    player =>
-                        player.remoteId ===
-                        data.healerId
-                );
+multiplayerSocket.onerror = (error) => {
+    console.error("❌ MULTIPLAYER CONNECTION ERROR:", error);
+};
 
-            const target =
-                players.find(
-                    player =>
-                        player.remoteId ===
-                        data.targetId
-                );
-
-            if(!healer || !target){
-                return;
-            }
-
-            target.hp = data.hp;
-            target.maxHp = data.maxHp;
-            target.alive = data.alive;
-            healer.healing = data.healerHealing;
-
-            const targetElement =
-                document.getElementById(
-                    "player-" + target.id
-                );
-
-            if(targetElement){
-
-                targetElement.classList.add("healing");
-
-                const rect =
-                    targetElement.getBoundingClientRect();
-
-                const healText =
-                    document.createElement("div");
-
-                healText.className =
-                    "damageNumber healNumber";
-                healText.textContent = "+" + data.heal + " HP";
-                healText.style.left =
-                    (rect.left + rect.width / 2) + "px";
-                healText.style.top =
-                    (rect.top + rect.height / 2) + "px";
-
-                document.body.appendChild(healText);
-
-                setTimeout(() => {
-                    targetElement.classList.remove("healing");
-                    healText.remove();
-                },800);
-
-            }
-
-            const healerElement =
-                document.getElementById(
-                    "player-" + healer.id
-                );
-
-            if(healerElement){
-
-                healerElement.classList.add("healerCast");
-
-                setTimeout(() => {
-                    healerElement.classList.remove("healerCast");
-                },600);
-
-            }
-
-            eventBox.textContent =
-                "💚 " +
-                healer.name +
-                " HEALED " +
-                target.name +
-                " FOR +" +
-                data.heal +
-                " HP";
-
-            addEvent(eventBox.textContent);
-
-            update();
-
-        }
-
-    }
-    catch(error){
-
-        console.error(
-            "❌ MULTIPLAYER MESSAGE ERROR:",
-            error
-        );
-
-    }
-
+multiplayerSocket.onclose = () => {
+    console.log("🔴 MULTIPLAYER DISCONNECTED");
 };
 
 
