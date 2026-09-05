@@ -272,6 +272,7 @@ export class Chat extends Server<Env> {
   private twitchBuffer = "";
   private twitchReconnectTimer: any = null;
   private twitchConnected = false;
+  private refreshRetryTimer: any = null;
 
   private getWorkerEnv(): any {
     return (this as any).env;
@@ -290,6 +291,10 @@ export class Chat extends Server<Env> {
       if (this.twitchSocket) {
         try { this.twitchSocket.close(); } catch {}
         this.twitchSocket = null;
+      }
+      if (this.refreshRetryTimer) {
+        clearTimeout(this.refreshRetryTimer);
+        this.refreshRetryTimer = null;
       }
       this.twitchConnected = false;
       
@@ -375,22 +380,37 @@ export class Chat extends Server<Env> {
       throw new Error("Conta da Twitch não encontrada");
     }
 
-    // SALVA O REFRESH TOKEN TAMBÉM!
+    // SALVA O REFRESH TOKEN E O ACCESS TOKEN
     await this.ctx.storage.put("twitch_access_token", tokenData.access_token);
-    await this.ctx.storage.put("twitch_refresh_token", tokenData.refresh_token || null);
+    // IMPORTANTE: A Twitch pode não retornar refresh_token em alguns fluxos, mas aqui deve vir
+    if (tokenData.refresh_token) {
+      await this.ctx.storage.put("twitch_refresh_token", tokenData.refresh_token);
+    } else {
+      console.warn("⚠️ Nenhum refresh_token recebido. O token pode não ser renovável automaticamente.");
+    }
     await this.ctx.storage.put("twitch_bot_login", twitchUser.login);
     await this.ctx.storage.put("twitch_enabled", true);
-    await this.ctx.storage.put("twitch_token_expires_at", Date.now() + 4 * 60 * 60 * 1000); // 4 horas
+    // Define expiração para ~4 horas (valor típico da Twitch)
+    await this.ctx.storage.put("twitch_token_expires_at", Date.now() + 4 * 60 * 60 * 1000);
+
+    console.log("✅ Token salvo com sucesso. Refresh token presente:", !!tokenData.refresh_token);
 
     await this.connectTwitchChat();
     return true;
   }
 
-  // ========== MÉTODO PRINCIPAL COM RENOVAÇÃO AUTOMÁTICA ==========
+  // ========== MÉTODO PRINCIPAL COM RENOVAÇÃO AUTOMÁTICA MELHORADA ==========
   private async connectTwitchChat() {
+    // Se já estiver conectado, não faz nada
     if (this.twitchSocket && this.twitchConnected) {
       console.log("🟣 Twitch chat já está conectado");
       return;
+    }
+
+    // Limpa timers de retry anteriores
+    if (this.refreshRetryTimer) {
+      clearTimeout(this.refreshRetryTimer);
+      this.refreshRetryTimer = null;
     }
 
     const enabled = await this.ctx.storage.get("twitch_enabled");
@@ -404,17 +424,20 @@ export class Chat extends Server<Env> {
       return;
     }
 
-    // 🔄 VERIFICA SE O TOKEN EXPIROU OU ESTÁ PERTO DE EXPIRAR
+    // Verifica se o token expirou ou está perto de expirar
+    let needsRefresh = false;
     if (token && expiresAt) {
       const timeUntilExpiry = Number(expiresAt) - Date.now();
-      if (timeUntilExpiry < 5 * 60 * 1000) { // Menos de 5 minutos
+      if (timeUntilExpiry < 5 * 60 * 1000) { // menos de 5 minutos
         console.log(`⏳ Token expira em ${Math.round(timeUntilExpiry / 60000)} minutos. Renovando...`);
-        token = null; // Força renovação
+        needsRefresh = true;
       }
+    } else if (!token) {
+      needsRefresh = true;
     }
 
-    // 🔄 RENOVA O TOKEN SE NECESSÁRIO
-    if (!token && refreshToken) {
+    // Se precisar renovar e tiver refresh token, tenta
+    if (needsRefresh && refreshToken) {
       try {
         const env = this.getWorkerEnv();
         console.log("🔄 Tentando renovar token do Twitch...");
@@ -433,18 +456,42 @@ export class Chat extends Server<Env> {
         if (!response.ok) {
           const errorText = await response.text();
           console.error("❌ Falha ao renovar token:", errorText);
-          // Se falhar, mantém o token antigo (pode estar expirado, mas tentamos)
-          token = await this.ctx.storage.get("twitch_access_token");
+          // Se falhar por token inválido, limpa os tokens para forçar reautorização
+          if (response.status === 400 && errorText.includes("invalid refresh token")) {
+            console.warn("⚠️ Refresh token inválido. Será necessário reautorizar.");
+            await this.ctx.storage.delete("twitch_access_token");
+            await this.ctx.storage.delete("twitch_refresh_token");
+            await this.ctx.storage.delete("twitch_token_expires_at");
+            token = null;
+          } else {
+            // Outro erro: tenta novamente em 30 segundos
+            console.log("🔄 Agendando nova tentativa de refresh em 30 segundos...");
+            this.refreshRetryTimer = setTimeout(() => {
+              this.refreshRetryTimer = null;
+              this.connectTwitchChat();
+            }, 30000);
+            return;
+          }
         } else {
           const data: any = await response.json();
           token = data.access_token;
           await this.ctx.storage.put("twitch_access_token", token);
+          // A Twitch pode ou não retornar um novo refresh_token; se retornar, atualiza
+          if (data.refresh_token) {
+            await this.ctx.storage.put("twitch_refresh_token", data.refresh_token);
+          }
           await this.ctx.storage.put("twitch_token_expires_at", Date.now() + 4 * 60 * 60 * 1000);
           console.log("✅ Token do Twitch renovado automaticamente!");
         }
       } catch (error) {
         console.error("❌ Erro ao renovar token:", error);
-        token = await this.ctx.storage.get("twitch_access_token");
+        // Tenta novamente em 30 segundos
+        console.log("🔄 Agendando nova tentativa de refresh em 30 segundos...");
+        this.refreshRetryTimer = setTimeout(() => {
+          this.refreshRetryTimer = null;
+          this.connectTwitchChat();
+        }, 30000);
+        return;
       }
     }
 
@@ -458,6 +505,7 @@ export class Chat extends Server<Env> {
     try {
       console.log("🟣 Conectando ao Twitch chat...");
       
+      // Fecha socket antigo se existir
       if (this.twitchSocket) {
         try { this.twitchSocket.close(); } catch {}
         this.twitchSocket = null;
@@ -512,6 +560,7 @@ export class Chat extends Server<Env> {
     console.log("🔄 Agendando reconexão Twitch em 10 segundos...");
     this.twitchReconnectTimer = setTimeout(() => {
       this.twitchReconnectTimer = null;
+      // Tenta reconectar chamando connectTwitchChat, que também tenta refresh se necessário
       this.connectTwitchChat();
     }, 10000);
   }
