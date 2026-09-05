@@ -8543,38 +8543,40 @@ function startPlayerEntries(){
    AUTOMATIC ATTACKS
 ============================================================ */
 
+// ===== ADICIONE ESTE ARRAY GLOBAL NO INÍCIO DO SCRIPT =====
+// (coloque junto com as outras variáveis globais, como `players`, `nextPlayerId`, etc.)
+let activeAttackLoops = new Set();
+
 function startPlayerAI(player){
 
-    // ===== IMPEDE MÚLTIPLOS LOOPS PARA O MESMO JOGADOR =====
-    if (player._attackLoopStarted) {
-        console.log("⚠️ Loop de ataque já iniciado para:", player.name);
+    // ===== IDENTIFICA O JOGADOR PELO remoteId OU id =====
+    const playerKey = player.remoteId || player.id;
+
+    // ===== SE JÁ EXISTE UM LOOP PARA ESTE JOGADOR, NÃO CRIA OUTRO =====
+    if (activeAttackLoops.has(playerKey)) {
+        console.log("⚠️ Loop de ataque já ativo para:", player.name, "(key:", playerKey, ")");
         return;
     }
-    player._attackLoopStarted = true;
 
-    console.log("🚀 startPlayerAI chamado para:", player.name, "speed:", player.speed, "alive:", player.alive, "classe:", player.class);
+    // ===== MARCA COMO ATIVO =====
+    activeAttackLoops.add(playerKey);
+    console.log("🚀 startPlayerAI chamado para:", player.name, "key:", playerKey, "speed:", player.speed);
 
     function nextAction(){
 
         if(!player.alive){
             console.log("⏳ Jogador morto, aguardando...", player.name);
-            setTimeout(
-                nextAction,
-                500
-            );
+            setTimeout(nextAction, 500);
             return;
         }
 
         if(battlePaused){
             console.log("⏳ Batalha pausada, aguardando...", player.name);
-            setTimeout(
-                nextAction,
-                500
-            );
+            setTimeout(nextAction, 500);
             return;
         }
 
-        console.log("⚔️ Executando ação para:", player.name, "classe:", player.class);
+        console.log("⚔️ Executando ação para:", player.name);
 
         if(player.class === "PRIEST"){
             healerAction(player);
@@ -8582,22 +8584,15 @@ function startPlayerAI(player){
             playerAttack(player);
         }
 
-        // Fallback: se speed for 0 ou undefined, usa 1000ms
         const attackSpeed = player.speed || 1000;
-        setTimeout(
-            nextAction,
-            attackSpeed
-        );
-
+        setTimeout(nextAction, attackSpeed);
     }
 
-    // Fallback no primeiro timeout também
     const initialDelay = player.speed || 1000;
-    setTimeout(
-        nextAction,
-        initialDelay
-    );
+    setTimeout(nextAction, initialDelay);
 
+    // ===== OPCIONAL: REMOVER O LOOP QUANDO O JOGADOR SAIR =====
+    // (mas não é essencial para o funcionamento)
 }
 
 
