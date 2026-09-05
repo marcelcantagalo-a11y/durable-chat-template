@@ -5371,30 +5371,30 @@ player._lastAttack = Date.now();
 
 function healerAction(healer){
 
+    console.log("💚 healerAction chamado para:", healer.name, "HP:", healer.hp, "/", healer.maxHp);
+
     if(!healer.alive){
+        console.log("❌ Healer está morto");
         return;
     }
 
     /*
-       A cura é decidida pelo Worker, para que
-       todas as abas recebam o mesmo resultado.
+       A cura é decidida pelo Worker, mas também executamos localmente
+       para garantir que o Priest cure mesmo se o servidor estiver lento.
     */
 
-    if(
-        multiplayerSocket.readyState !==
-        WebSocket.OPEN
-    ){
-        return;
+    // Envia pedido de cura para o servidor (para sincronizar com outros clientes)
+    if(multiplayerSocket.readyState === WebSocket.OPEN){
+        multiplayerSocket.send(
+            JSON.stringify({
+                type:"heal"
+            })
+        );
+        console.log("📤 Pedido de cura enviado para o servidor");
     }
 
-    multiplayerSocket.send(
-        JSON.stringify({
-            type:"heal"
-        })
-    );
-
-    return;
-
+    // ===== LÓGICA DE CURA LOCAL =====
+    // Encontra jogadores vivos com HP abaixo do máximo
     const damaged =
         players.filter(
             p =>
@@ -5403,23 +5403,15 @@ function healerAction(healer){
         );
 
     if(damaged.length === 0){
+        console.log("ℹ️ Ninguém precisa de cura");
         return;
     }
 
-    const target =
-        damaged[
-            Math.floor(
-                Math.random() *
-                damaged.length
-            )
-        ];
+    // Ordena os mais feridos primeiro
+    damaged.sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
+    const target = damaged[0];
 
-    /*
-       Base healing.
-       Starts small and grows very slowly
-       with the Priest's level.
-    */
-
+    // Cálculo da cura (base + nível)
     let heal =
         Math.floor(
             Math.random() * 16
@@ -5427,11 +5419,6 @@ function healerAction(healer){
 
     heal +=
         healer.level * 2;
-
-    /*
-       Healing power gained from level ups.
-       Default value is 1 for existing players.
-    */
 
     const healingPower =
         typeof healer.healingPower === "number"
@@ -5450,19 +5437,17 @@ function healerAction(healer){
         );
 
     if(heal <= 0){
+        console.log("ℹ️ Cura calculada é 0 para", target.name);
         return;
     }
 
-    target.hp +=
-        heal;
+    // Aplica a cura
+    target.hp += heal;
+    healer.healing += heal;
 
-    healer.healing +=
-        heal;
+    console.log(`💚 ${healer.name} curou ${target.name} em +${heal} HP`);
 
-    /* =====================================
-       💚 HEALING EFFECT
-    ===================================== */
-
+    // ===== EFEITO VISUAL DA CURA =====
     const targetElement =
         document.getElementById(
             "player-" + target.id
@@ -5541,10 +5526,11 @@ function healerAction(healer){
 
             healText.remove();
 
-        },800);
+        }, 800);
 
     }
 
+    // ===== ATUALIZA UI E EVENTOS =====
     eventBox.textContent =
         "💚 " +
         healer.name +
@@ -5554,6 +5540,7 @@ function healerAction(healer){
         heal +
         " HP";
 
+    // Ganho de XP (metade da cura)
     gainXp(
         healer,
         Math.floor(
@@ -5563,10 +5550,7 @@ function healerAction(healer){
 
     update();
 
-    /* =====================================
-       ✝️ PRIEST HEALING ANIMATION
-    ===================================== */
-
+    // ===== ANIMAÇÃO DO HEALER =====
     const healerElement =
         document.getElementById(
             "player-" + healer.id
@@ -5578,6 +5562,7 @@ function healerAction(healer){
             "healerCast"
         );
 
+        // Força reflow para reiniciar a animação
         void healerElement.offsetWidth;
 
         healerElement.classList.add(
@@ -5590,7 +5575,7 @@ function healerAction(healer){
                 "healerCast"
             );
 
-        },600);
+        }, 600);
 
     }
 
