@@ -2857,7 +2857,7 @@ multiplayerSocket.onmessage = (event) => {
 
     /* =====================================
        👥 JOGADORES
-    ===================================== */
+       ===================================== */
 
     data.players.forEach(
         remotePlayer => {
@@ -3018,6 +3018,15 @@ multiplayerSocket.onmessage = (event) => {
             );
 
 
+            // =============================================
+            // 🔥 INICIA ATAQUE AUTOMÁTICO PARA HUMANOS
+            // =============================================
+            if (!remotePlayerObject.isAI) {
+                startPlayerAI(remotePlayerObject);
+                console.log("⚔️ ATAQUE AUTOMÁTICO INICIADO PARA:", remotePlayerObject.name);
+            }
+
+
             addEvent(
                 remotePlayerObject.icon +
                 " " +
@@ -3031,7 +3040,274 @@ multiplayerSocket.onmessage = (event) => {
 
     update();
 
-}
+} // FIM DO roomState
+
+
+        /* =====================================
+           ⚔️ NOVO JOGADOR ENTROU
+           (playerJoined) – CORRIGIDO
+        ===================================== */
+
+        else if(data.type === "playerJoined"){
+
+            const remotePlayer =
+                data.player;
+
+
+            const alreadyExists =
+                players.some(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
+
+
+            if(alreadyExists){
+                return;
+            }
+
+
+            const classData =
+                classes.find(
+                    c =>
+                        c.name ===
+                        remotePlayer.class
+                );
+
+
+            if(!classData){
+                return;
+            }
+
+
+            const newRemotePlayer = {
+
+                id:
+                    nextPlayerId++,
+
+                remoteId:
+                    remotePlayer.id,
+
+                serverPosition:
+                    remotePlayer.position,
+
+                name:
+                    remotePlayer.name,
+
+                class:
+                    remotePlayer.class,
+
+                icon:
+                    classIcons[
+                        remotePlayer.class
+                    ],
+
+                damage:[
+                    classData.damage[0],
+                    classData.damage[1]
+                ],
+
+                speed:
+                    classData.speed,
+
+                level:1,
+
+                xp:0,
+
+                nextXp:100,
+
+                maxHp:
+                    classData.hp,
+
+                hp:
+                    classData.hp,
+
+                alive:true,
+
+                totalDamage:0,
+
+                healing:0,
+
+                isAI:
+                    remotePlayer.isAI === true
+
+            };
+
+
+            players.push(
+                newRemotePlayer
+            );
+
+
+            createPlayerUI(
+                newRemotePlayer
+            );
+
+
+            // =============================================
+            // 🔥 INICIA ATAQUE AUTOMÁTICO PARA HUMANOS
+            // =============================================
+            if (!newRemotePlayer.isAI) {
+                startPlayerAI(newRemotePlayer);
+                console.log("⚔️ ATAQUE AUTOMÁTICO INICIADO PARA:", newRemotePlayer.name);
+            }
+
+
+            eventBox.textContent =
+                newRemotePlayer.icon +
+                " " +
+                newRemotePlayer.name +
+                " joined the battle!";
+
+
+            addEvent(
+                newRemotePlayer.icon +
+                " " +
+                newRemotePlayer.name +
+                " joined!"
+            );
+
+
+            update();
+
+        }
+
+
+        /* =====================================
+           🔴 JOGADOR SAIU
+        ===================================== */
+
+        else if(data.type === "playerLeft"){
+
+            const playerIndex =
+                players.findIndex(
+                    player =>
+                        player.remoteId ===
+                        data.playerId
+                );
+
+
+            if(playerIndex === -1){
+                return;
+            }
+
+
+            const player =
+                players[playerIndex];
+
+
+            const element =
+                document.getElementById(
+                    "player-" + player.id
+                );
+
+
+            if(element){
+                element.remove();
+            }
+
+
+            players.splice(
+                playerIndex,
+                1
+            );
+
+
+            addEvent(
+                "🔴 " +
+                player.name +
+                " left the battle!"
+            );
+
+
+            update();
+
+        }
+
+
+        /* =====================================
+           🔄 PLAYER UPDATED
+        ===================================== */
+
+        else if(data.type === "playerUpdated"){
+
+            const remotePlayer =
+                data.player;
+
+
+            const localPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
+
+
+            if(!localPlayer){
+                return;
+            }
+
+
+            Object.assign(
+                localPlayer,
+                remotePlayer
+            );
+
+
+            update();
+
+        }
+
+
+        /* =====================================
+           ⚔️ RESULTADO DO ATAQUE
+        ===================================== */
+
+        else if(data.type === "attackResult"){
+
+            // ... (seu código existente para attackResult)
+            // Não mexa nesse bloco – ele já está funcionando.
+            // (mantenha o código que você já tem aqui)
+
+        }
+
+
+        /* =====================================
+           👹 ATAQUE OFICIAL DO BOSS
+        ===================================== */
+
+        else if(data.type === "bossAttackResult"){
+
+            // ... (seu código existente para bossAttackResult)
+            // Não mexa nesse bloco.
+
+        }
+
+
+        /* =====================================
+           💚 CURA OFICIAL DO PRIEST
+        ===================================== */
+
+        else if(data.type === "healResult"){
+
+            // ... (seu código existente para healResult)
+            // Não mexa nesse bloco.
+
+        }
+
+
+    } // FIM DO TRY
+
+    catch(error){
+
+        console.error(
+            "❌ MULTIPLAYER MESSAGE ERROR:",
+            error
+        );
+
+    }
+
+}; // FIM DO onmessage
 
 
         /* =====================================
