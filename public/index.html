@@ -5386,7 +5386,9 @@ function playerAttack(player){
 
         JSON.stringify({
 
-            type:"attack"
+            type:"attack",
+
+            playerId: player.id   // <-- ADICIONADO: envia o ID do jogador
 
         })
 
