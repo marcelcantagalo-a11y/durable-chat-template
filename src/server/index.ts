@@ -655,22 +655,9 @@ export class Chat extends Server<Env> {
       healing: 0,
       alive: true,
       taunt: false,
-      isAI: false,
+      isAI: false,          // <-- GARANTIDO QUE É FALSE PARA JOGADORES DA TWITCH
       isTwitch: true
     };
-
-    this.players.set(playerId, player);
-
-    this.broadcast(JSON.stringify({
-      type: "playerJoined",
-      player
-    }));
-
-    this.broadcastRoomState();
-
-    console.log(`📺 TWITCH !PLAY: ${cleanName} (${playerClass})`);
-    return { ok: true, player };
-  }
 
   // ========== CICLO DE VIDA ==========
   onStart() {
