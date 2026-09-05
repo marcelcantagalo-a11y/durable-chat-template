@@ -5309,6 +5309,12 @@ requestAnimationFrame(() => {
 
 }
 function playerAttack(player){
+   // No início da função
+if (player._lastAttack && Date.now() - player._lastAttack < player.speed * 0.8) {
+    console.log("⏳ Ataque ignorado (debounce):", player.name);
+    return;
+}
+player._lastAttack = Date.now();
     console.log("⚔️ ENVIANDO ATAQUE PARA:", player.name, "ID local:", player.id, "remoteId:", player.remoteId);
     
     if(!player){
