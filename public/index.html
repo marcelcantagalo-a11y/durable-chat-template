@@ -8554,38 +8554,38 @@ function startPlayerEntries(){
 let activeAttackLoops = new Set();
 
 function startPlayerAI(player){
-
-    const playerKey = player.remoteId || player.id;
-    console.log(`🔍 startPlayerAI - ${player.name} (${player.class}) - key: ${playerKey}, speed recebido: ${player.speed}ms`);
-
-    if (activeAttackLoops.has(playerKey)) {
-        console.log("⚠️ Loop já ativo para:", player.name);
+    // ===== SE JÁ EXISTE UM LOOP PARA ESTE JOGADOR, NÃO CRIA OUTRO =====
+    if (player._attackLoopStarted) {
+        console.log("⚠️ Loop de ataque já ativo para:", player.name);
         return;
     }
-    activeAttackLoops.add(playerKey);
+    player._attackLoopStarted = true;
+
+    console.log("🚀 startPlayerAI chamado para:", player.name, "speed:", player.speed, "alive:", player.alive, "classe:", player.class);
 
     function nextAction(){
         if(!player.alive){
+            console.log("⏳ Jogador morto, aguardando...", player.name);
             setTimeout(nextAction, 500);
             return;
         }
         if(battlePaused){
+            console.log("⏳ Batalha pausada, aguardando...", player.name);
             setTimeout(nextAction, 500);
             return;
         }
-
-        console.log(`⚔️ ${player.name} atacando agora - próximo ataque em ${player.speed || 1000}ms`);
+        console.log("⚔️ Executando ação para:", player.name, "classe:", player.class);
         if(player.class === "PRIEST"){
             healerAction(player);
         }else{
             playerAttack(player);
         }
-
         const attackSpeed = player.speed || 1000;
         setTimeout(nextAction, attackSpeed);
     }
 
-    setTimeout(nextAction, player.speed || 1000);
+    const initialDelay = player.speed || 1000;
+    setTimeout(nextAction, initialDelay);
 }
 
 
