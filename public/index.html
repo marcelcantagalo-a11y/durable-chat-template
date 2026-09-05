@@ -1,5 +1,2650 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boss Fight V9</title>
 
-if(data.type === "roomState"){
+<style>
+/* =========================================
+   V10.2 - ARENA VIVA
+========================================= */
+
+const characterImages = {
+
+    "TANK":"tank.png",
+    "WARRIOR":"warrior.png",
+    "ARCHER":"archer.png",
+    "MAGE":"mage.png",
+    "PRIEST":"priest.png"
+
+};
+
+@keyframes heroIdle {
+
+    0%, 100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+
+}
+
+.player {
+    animation: heroIdle 1.8s ease-in-out infinite;
+}
+
+.player .playerClass {
+    /* Keep class label unchanged */
+}
+
+.player.priest {
+    animation: none;
+}
+
+
+@keyframes bossIdle {
+
+    0%, 100% {
+        transform: translateY(0px) scale(1);
+    }
+
+    50% {
+        transform: translateY(-7px) scale(1.03);
+    }
+
+}
+
+.boss {
+    animation: bossIdle 2s ease-in-out infinite;
+}
+
+
+@keyframes battleShake {
+
+    0% {
+        transform: translate(0,0);
+    }
+
+    25% {
+        transform: translate(-3px,2px);
+    }
+
+    50% {
+        transform: translate(3px,-2px);
+    }
+
+    75% {
+        transform: translate(-2px,-1px);
+    }
+
+    100% {
+        transform: translate(0,0);
+    }
+
+}
+
+.player.battleHit {
+    animation: battleShake .25s ease;
+}
+
+
+@keyframes magicAura {
+
+    0%,100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.35)
+                drop-shadow(0 0 8px #9d4edd);
+    }
+
+}
+
+.player.magicAura {
+    animation: magicAura 1.2s infinite;
+}
+
+
+@keyframes healerAura {
+
+    0%,100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.4)
+                drop-shadow(0 0 10px #4dff88);
+    }
+
+}
+
+.player.healerAura {
+    animation: healerAura 1.4s infinite;
+}
+.projectile{
+    position:fixed;
+    z-index:9999;
+    pointer-events:none;
+
+    width:50px;
+    height:50px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    transition:
+        left .55s ease-out,
+        top .55s ease-out;
+}
+.tauntSkill{
+    position:fixed;
+    z-index:10000;
+    pointer-events:none;
+
+    font-size:28px;
+    font-weight:900;
+    color:#fff;
+
+    white-space:nowrap;
+
+    text-shadow:
+        0 0 5px #fff,
+        0 0 12px #ffb300,
+        0 0 25px #ff6a00;
+
+    transition:
+        left .8s ease-out,
+        top .8s ease-out,
+        transform .8s ease-out,
+        opacity .8s ease-out;
+
+    transform:scale(.7);
+    opacity:0;
+}
+.skillAnnouncement{
+    position:fixed;
+    z-index:10000;
+    pointer-events:none;
+
+    left:50%;
+    top:35%;
+
+    transform:translate(-50%,-50%);
+
+    font-size:30px;
+    font-weight:900;
+    text-align:center;
+    white-space:nowrap;
+
+    color:white;
+
+    text-shadow:
+        0 0 5px white,
+        0 0 12px #ffb300,
+        0 0 25px #ff6a00;
+
+    animation:skillAnnouncementAnim 1.8s ease-out forwards;
+}
+
+@keyframes skillAnnouncementAnim{
+
+    0%{
+        opacity:0;
+        transform:translate(-50%,-50%) scale(.5);
+    }
+
+    15%{
+        opacity:1;
+        transform:translate(-50%,-50%) scale(1.2);
+    }
+
+    70%{
+        opacity:1;
+        transform:translate(-50%,-50%) scale(1);
+    }
+
+    100%{
+        opacity:0;
+        transform:translate(-50%,-50%) scale(1.15);
+    }
+
+}
+.projectile.arrow{
+
+    font-size:42px;
+
+    filter:none;
+
+    animation:
+        arrowProjectile
+        .18s
+        linear
+        infinite
+        alternate;
+}
+
+
+@keyframes arrowProjectile{
+
+    from{
+
+        transform:
+            scale(.85)
+            rotate(-5deg);
+
+        opacity:.85;
+    }
+
+    to{
+
+        transform:
+            scale(1.15)
+            rotate(5deg);
+
+        opacity:1;
+    }
+
+}
+
+.projectile.fire{
+    font-size:42px;
+    filter:
+        drop-shadow(0 0 6px white)
+        drop-shadow(0 0 15px orange)
+        drop-shadow(0 0 25px red);
+}
+
+.projectile.magic{
+    animation:magicProjectile .2s infinite alternate;
+}
+
+@keyframes magicProjectile{
+
+    from{
+        transform:scale(.9);
+    }
+
+    to{
+        transform:scale(1.3);
+    }
+
+}
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    background:#050814;
+    color:white;
+    font-family:Arial, sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    min-height:100vh;
+}
+
+.game{
+    width:420px;
+    min-height:100vh;
+    background:
+        radial-gradient(circle at top,#171d45 0%,#080b18 45%,#03050c 100%);
+    padding:10px;
+    overflow:hidden;
+}
+
+/* =========================
+   TOPO
+========================= */
+
+.title{
+    text-align:center;
+    font-size:24px;
+    font-weight:bold;
+    margin-bottom:0;
+}
+
+.subtitle{
+    text-align:center;
+    color:#aaa;
+    font-size:10px;
+    letter-spacing:1.5px;
+}
+
+.bossLevel{
+    text-align:center;
+    color:#ffd21c;
+    font-size:15px;
+    font-weight:bold;
+    margin:3px 0;
+}
+
+.bossName{
+    text-align:center;
+    font-size:18px;
+    font-weight:bold;
+    margin-bottom:3px;
+}
+
+.boss{
+
+    width:95px;
+
+    height:95px;
+
+    margin:2px auto;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    font-size:58px;
+
+    border-radius:50%;
+
+    background:radial-gradient(circle,#38105f,#120a27);
+
+    border:2px solid #9d4edd;
+
+    box-shadow:0 0 20px #7b2cbf;
+
+    transition:.2s;
+
+}
+
+.boss.rage{
+
+    animation:rage .5s infinite alternate;
+
+    border-color:#ff2020;
+
+    box-shadow:0 0 30px red;
+
+}
+
+@keyframes rage{
+
+    from{transform:scale(1);}
+
+    to{transform:scale(1.05);}
+
+}
+
+.hpContainer{
+
+    margin:2px 3px 5px;
+
+}
+
+.hpBar{
+
+    width:100%;
+
+    height:16px;
+
+    background:#242424;
+
+    border:2px solid #555;
+
+    border-radius:12px;
+
+    overflow:hidden;
+
+}
+
+.hpFill{
+
+    height:100%;
+
+    width:100%;
+
+    background:linear-gradient(90deg,#00c853,#76ff03);
+
+    transition:.25s;
+
+}
+
+.hpText{
+
+    text-align:center;
+
+    font-size:10px;
+
+    margin-top:2px;
+
+}
+
+/* =========================
+   EVENTO
+========================= */
+
+.eventBox{
+    min-height:38px;
+    background:#101528;
+    border:1px solid #30395c;
+    border-radius:8px;
+    padding:8px;
+    text-align:center;
+    font-size:12px;
+    margin-bottom:8px;
+}
+
+/* =========================
+   FORMATION
+========================= */
+
+.formationTitle{
+    text-align:center;
+    font-size:12px;
+    color:#aaa;
+    margin:4px 0;
+}
+
+.players{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+}
+
+.row{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:2px;
+}
+
+.rowTitle{
+    grid-column:1/-1;
+    font-size:8px;
+    color:#aaa;
+    text-align:left;
+    padding-left:3px;
+    margin-top:1px;
+    margin-bottom:1px;
+}
+
+/* =========================
+   PLAYER
+========================= */
+
+.player{
+    background:#0e1325;
+    border:1px solid #252d49;
+    border-radius:6px;
+    padding:2px 1px;
+    text-align:center;
+    min-height:82px;
+    position:relative;
+    transition:.2s;
+}
+
+.player:hover{
+    transform:translateY(-2px);
+}
+
+.playerIcon{
+
+    height:58px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+}
+
+.playerIcon img{
+
+    width:55px;
+
+    height:55px;
+
+    object-fit:contain;
+
+    display:block;
+
+}
+
+.playerName{
+    font-size:8px;
+    font-weight:bold;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.playerLevel{
+    font-size:7px;
+    color:#ffd21c;
+    margin-top:2px;
+}
+
+.playerHp{
+    height:4px;
+    background:#272727;
+    border-radius:5px;
+    overflow:hidden;
+    margin:3px 1px 1px;
+}
+
+.playerHpFill{
+    height:100%;
+    background:#00d26a;
+}
+
+.playerXp{
+    height:2px;
+    background:#252525;
+    border-radius:4px;
+    overflow:hidden;
+}
+
+.playerXpFill{
+    height:100%;
+    background:#ffd600;
+}
+
+.dead{
+    opacity:.35;
+    filter:grayscale(1);
+}
+
+/* =========================
+   PAINEIS
+========================= */
+
+.panelGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:5px;
+    margin-top:8px;
+}
+
+.panel{
+    background:#0c1121;
+    border:1px solid #293252;
+    border-radius:8px;
+    padding:7px;
+}
+
+.panelTitle{
+    color:#ffd21c;
+    font-size:11px;
+    font-weight:bold;
+    margin-bottom:5px;
+}
+
+.panelText{
+    font-size:9px;
+    line-height:1.5;
+}
+
+/* =========================
+   STATS
+========================= */
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:4px;
+    margin-top:6px;
+}
+
+.stat{
+    background:#11172b;
+    border:1px solid #293252;
+    border-radius:7px;
+    padding:6px 2px;
+    text-align:center;
+}
+
+.statNumber{
+    font-size:17px;
+    font-weight:bold;
+    color:#ffd21c;
+}
+
+.statLabel{
+    font-size:7px;
+    color:#aaa;
+}
+
+/* =========================
+   VITORIA
+========================= */
+
+.victory{
+
+    position:fixed;
+
+    inset:0;
+
+    background:rgba(0,0,0,.85);
+
+    display:none;
+
+    align-items:center;
+
+    justify-content:center;
+
+    z-index:20;
+
+}
+
+.victory.active{
+
+    display:flex;
+
+}
+
+.victoryBox{
+
+    width:340px;
+    max-width:90vw;
+
+    background:
+        radial-gradient(
+            circle at top,
+            #20284a 0%,
+            #11162b 55%,
+            #080b17 100%
+        );
+
+    border:2px solid #ffd21c;
+
+    border-radius:18px;
+
+    padding:24px 20px 22px;
+
+    text-align:center;
+
+    box-shadow:
+        0 0 25px rgba(255,210,28,.35),
+        0 0 60px rgba(255,210,28,.12);
+
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+
+}
+.victoryTrophy{
+
+    font-size:70px;
+
+    line-height:1;
+
+    margin-bottom:8px;
+
+    filter:
+        drop-shadow(0 0 8px #ffd21c)
+        drop-shadow(0 0 18px rgba(255,210,28,.6));
+
+}
+
+.victoryTitle{
+
+    font-size:28px;
+
+    line-height:1.1;
+
+    color:#ffd21c;
+
+    font-weight:900;
+
+    letter-spacing:.5px;
+
+    margin:0 0 16px;
+
+    text-shadow:
+        0 0 6px rgba(255,210,28,.7),
+        0 0 14px rgba(255,210,28,.35);
+
+}
+
+
+.victoryBoss{
+
+    font-size:78px;
+
+    line-height:1;
+
+    margin:2px 0 10px;
+
+    filter:
+        drop-shadow(0 0 8px rgba(255,255,255,.35));
+
+}
+
+
+.victoryText{
+
+    font-size:18px;
+
+    line-height:1.35;
+
+    font-weight:900;
+
+    color:#fff;
+
+    margin-top:4px;
+
+    text-shadow:
+        0 2px 5px #000;
+
+}
+
+
+/* =====================================
+   💀 GAME OVER SCREEN
+===================================== */
+
+.victory.gameOver
+.victoryBox{
+
+    background:
+        radial-gradient(
+            circle at center,
+            #2a0505 0%,
+            #120000 55%,
+            #070707 100%
+        );
+
+    border:3px solid #ff2020;
+
+    box-shadow:
+        0 0 20px #ff2020,
+        0 0 50px rgba(255,0,0,.7),
+        inset 0 0 35px rgba(255,0,0,.25);
+
+    animation:gameOverPulse 1.2s infinite alternate;
+
+}
+
+
+.victory.gameOver .victoryTitle{
+
+    color:#ff3030;
+
+    font-size:34px;
+
+    font-weight:900;
+
+    text-shadow:
+        0 0 8px #ff0000,
+        0 0 20px rgba(255,0,0,.8);
+
+}
+
+
+.victory.gameOver .victoryBoss{
+
+    font-size:90px;
+
+    margin:16px 0;
+
+    filter:
+        drop-shadow(0 0 8px #ff0000)
+        drop-shadow(0 0 18px rgba(255,0,0,.8));
+
+}
+
+
+.victory.gameOver #victoryText{
+
+    color:#fff;
+
+    font-size:20px;
+
+    font-weight:bold;
+
+}
+
+
+@keyframes gameOverPulse{
+
+    from{
+        transform:scale(1);
+    }
+
+    to{
+        transform:scale(1.025);
+    }
+
+}
+/* =========================
+   FLASH
+========================= */
+
+.flash{
+    position:fixed;
+    inset:0;
+    background:white;
+    opacity:0;
+    pointer-events:none;
+    z-index:30;
+}
+
+.flash.active{
+    animation:flash .4s;
+}
+
+@keyframes flash{
+    0%{opacity:.8}
+    100%{opacity:0}
+}
+
+/* =========================
+   RESPONSIVO
+========================= */
+
+@media(max-width:430px){
+    .game{
+        width:100%;
+    }
+}
+/* =========================================
+   ANIMATIONS V9.1
+========================================= */
+
+@keyframes attack{
+
+    0%{
+        transform:translateX(0) scale(1);
+    }
+
+    40%{
+        transform:translateX(8px) scale(1.08);
+    }
+
+    100%{
+        transform:translateX(0) scale(1);
+    }
+
+}
+
+.player.attacking{
+    animation:attack .35s ease;
+}
+
+
+@keyframes tankAttack{
+
+    0%{
+        transform:translateX(0);
+    }
+
+    40%{
+        transform:translateX(10px) rotate(-5deg);
+    }
+
+    100%{
+        transform:translateX(0);
+    }
+
+}
+
+.player.tankAttack{
+    animation:tankAttack .4s ease;
+}
+
+
+@keyframes assassinAttack{
+
+    0%{
+        transform:translateX(0);
+    }
+
+    35%{
+        transform:translateX(18px) scale(1.15);
+    }
+
+    100%{
+        transform:translateX(0);
+    }
+
+}
+
+.player.assassinAttack{
+    animation:assassinAttack .3s ease;
+}
+
+
+@keyframes mageAttack{
+
+    0%{
+        transform:scale(1);
+        filter:brightness(1);
+    }
+
+    50%{
+        transform:scale(1.18);
+        filter:brightness(1.5);
+    }
+
+    100%{
+        transform:scale(1);
+        filter:brightness(1);
+    }
+
+}
+
+.player.mageAttack{
+    animation:mageAttack .5s ease;
+}
+
+
+@keyframes archerAttack{
+
+    0%{
+        transform:translateX(0);
+    }
+
+    45%{
+        transform:translateX(6px) rotate(3deg);
+    }
+
+    100%{
+        transform:translateX(0);
+    }
+
+}
+
+.player.archerAttack{
+    animation:archerAttack .3s ease;
+}
+
+
+@keyframes healerCast{
+
+    0%{
+        transform:scale(1);
+        filter:brightness(1);
+    }
+
+    50%{
+        transform:scale(1.15);
+        filter:brightness(1.6);
+    }
+
+    100%{
+        transform:scale(1);
+        filter:brightness(1);
+    }
+
+}
+
+.player.healerCast{
+    animation:healerCast .6s ease;
+}
+
+
+@keyframes bossHit{
+
+    0%{
+        transform:scale(1);
+    }
+
+    25%{
+        transform:translateX(-5px) scale(1.05);
+    }
+
+    50%{
+        transform:translateX(5px) scale(1.05);
+    }
+
+    75%{
+        transform:translateX(-3px);
+    }
+
+    100%{
+        transform:scale(1);
+    }
+
+}
+
+.boss.hit{
+    animation:bossHit .25s ease;
+}
+
+
+@keyframes floatingDamage{
+
+    0%{
+        opacity:1;
+        transform:translateY(0) scale(1);
+    }
+
+    100%{
+        opacity:0;
+        transform:translateY(-35px) scale(1.25);
+    }
+
+}
+
+.damageNumber{
+
+    position:fixed;
+    pointer-events:none;
+    z-index:50;
+
+    color:#ff4d4d;
+
+    font-size:18px;
+    font-weight:bold;
+
+    text-shadow:
+        0 2px 4px black;
+
+    animation:floatingDamage .8s ease forwards;
+
+}
+
+
+.healNumber{
+
+    color:#4dff88;
+
+}
+
+
+@keyframes deathAnim{
+
+    0%{
+        transform:scale(1);
+    }
+
+    40%{
+        transform:scale(.8) rotate(-5deg);
+    }
+
+    100%{
+        transform:scale(.7);
+    }
+
+}
+
+.player.dead{
+    animation:none !important;
+}
+
+
+@keyframes healAura{
+
+    0%{
+        box-shadow:0 0 0 rgba(80,255,150,0);
+    }
+
+    50%{
+        box-shadow:0 0 18px rgba(80,255,150,.8);
+    }
+
+    100%{
+        box-shadow:0 0 0 rgba(80,255,150,0);
+    }
+
+}
+
+.player.healing{
+    animation:healAura .7s ease;
+}
+
+
+@keyframes idle{
+
+    0%,100%{
+        transform:translateY(0);
+    }
+
+    50%{
+        transform:translateY(-2px);
+    }
+
+}
+
+.playerIcon{
+    animation:idle 2.5s ease-in-out infinite;
+}
+.player.dead .playerIcon{
+    animation:none !important;
+}
+/* =========================================
+   V11 - BOSS SPELLS AND PROJECTILES
+========================================= */
+
+.bossProjectile{
+    position:fixed;
+    z-index:120;
+    pointer-events:none;
+    font-size:32px;
+    transition:all .5s cubic-bezier(.2,.8,.3,1);
+    filter:drop-shadow(0 0 10px white);
+}
+
+.fireball{
+    animation:fireSpin .35s linear infinite;
+}
+
+@keyframes fireSpin{
+    from{
+        transform:rotate(0deg) scale(1);
+    }
+    to{
+        transform:rotate(360deg) scale(1.15);
+    }
+}
+
+.lightningProjectile{
+    font-size:38px;
+    animation:lightningPulse .12s infinite alternate;
+}
+
+@keyframes lightningPulse{
+    from{
+        transform:scale(1);
+        filter:brightness(1);
+    }
+    to{
+        transform:scale(1.35);
+        filter:brightness(2);
+    }
+}
+
+.shadowProjectile{
+    font-size:34px;
+    animation:shadowPulse .3s infinite alternate;
+}
+
+@keyframes shadowPulse{
+    from{
+        transform:scale(.9);
+    }
+    to{
+        transform:scale(1.25);
+    }
+}
+
+
+/* Impact */
+
+.skillImpact{
+    position:fixed;
+    z-index:130;
+    pointer-events:none;
+    font-size:42px;
+    animation:impact .5s ease forwards;
+}
+
+@keyframes impact{
+
+    0%{
+        opacity:1;
+        transform:scale(.4);
+    }
+
+    50%{
+        opacity:1;
+        transform:scale(1.4);
+    }
+
+    100%{
+        opacity:0;
+        transform:scale(1.8);
+    }
+
+}
+
+
+/* Explosion area */
+
+.areaExplosion{
+    position:fixed;
+    z-index:110;
+    width:100px;
+    height:100px;
+    border:3px solid #b56cff;
+    border-radius:50%;
+    pointer-events:none;
+    animation:areaBoom .55s ease forwards;
+}
+
+@keyframes areaBoom{
+
+    0%{
+        opacity:.9;
+        transform:scale(.2);
+        box-shadow:0 0 10px #b56cff;
+    }
+
+    100%{
+        opacity:0;
+        transform:scale(1.7);
+        box-shadow:0 0 45px #b56cff;
+    }
+
+}
+/* =========================================
+   SPECIAL ABILITIES
+========================================= */
+
+.skillEffect{
+    position:fixed;
+    z-index:10000;
+    pointer-events:none;
+    font-size:45px;
+    animation:skillPop .8s ease-out forwards;
+}
+
+@keyframes skillPop{
+
+    0%{
+        opacity:0;
+        transform:scale(.3);
+    }
+
+    30%{
+        opacity:1;
+        transform:scale(1.4);
+    }
+
+    100%{
+        opacity:0;
+        transform:scale(2);
+    }
+
+}
+
+
+/* TAUNT */
+
+.tauntAura{
+    animation:tauntPulse .5s infinite alternate !important;
+    position:relative;
+}
+
+
+.tauntShield{
+
+    position:absolute;
+
+    left:50%;
+    top:50%;
+
+    width:70px;
+    height:70px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    transform:
+        translate(-50%,-50%);
+
+    z-index:10;
+
+    pointer-events:none;
+
+    font-size:65px;
+
+    filter:
+        drop-shadow(0 0 8px #ffd000)
+        drop-shadow(0 0 20px #ff7300)
+        drop-shadow(0 0 35px #ff3300);
+
+    animation:
+        tauntShieldAnimation
+        .7s
+        ease-in-out
+        infinite
+        alternate;
+}
+
+
+@keyframes tauntShieldAnimation{
+
+    from{
+
+        transform:
+            translate(-50%, -50%)
+            scale(.85);
+
+        opacity:.75;
+
+    }
+
+    to{
+
+        transform:
+            translate(-50%, -50%)
+            scale(1.15);
+
+        opacity:1;
+
+    }
+
+}
+
+
+@keyframes tauntPulse{
+
+    from{
+
+        box-shadow:
+            0 0 8px #ffd000;
+    }
+
+    to{
+
+        box-shadow:
+            0 0 25px #ffd000,
+            0 0 45px #ff7300;
+    }
+
+}
+
+@keyframes tauntShieldAnimation{
+
+    from{
+
+        transform:
+            translate(-50%,-50%)
+            scale(.85);
+
+        opacity:.75;
+    }
+
+    to{
+
+        transform:
+            translate(-50%,-50%)
+            scale(1.2);
+
+        opacity:1;
+    }
+
+}
+
+    from{
+
+        transform:
+            translate(-50%,-50%)
+            scale(.9);
+
+        opacity:.8;
+    }
+
+    to{
+
+        transform:
+            translate(-50%,-50%)
+            scale(1.2);
+
+        opacity:1;
+    }
+
+}
+
+@keyframes tauntPulse{
+
+    from{
+        box-shadow:
+            0 0 8px #ffd000;
+    }
+
+    to{
+        box-shadow:
+            0 0 25px #ffd000,
+            0 0 45px #ff7300;
+    }
+
+}
+
+@keyframes shieldPulse{
+
+    from{
+        transform:
+            translate(-50%,-50%)
+            scale(.85);
+        opacity:.75;
+    }
+
+    to{
+        transform:
+            translate(-50%,-50%)
+            scale(1.15);
+        opacity:1;
+    }
+
+}
+
+/* METEOR */
+
+.meteorEffect{
+
+    position:fixed;
+
+    z-index:10001;
+
+    pointer-events:none;
+
+    font-size:60px;
+
+    transition:
+        top .7s cubic-bezier(.2,.8,.3,1);
+
+    filter:
+        drop-shadow(0 0 8px #ff6a00)
+        drop-shadow(0 0 18px red)
+        drop-shadow(0 0 30px #ffd000);
+
+    animation:
+        meteorGlow
+        .25s
+        infinite
+        alternate;
+}
+
+
+@keyframes meteorGlow{
+
+    from{
+
+        transform:scale(.9);
+
+    }
+
+    to{
+
+        transform:scale(1.15);
+
+    }
+
+}
+
+
+/* ARROW RAIN */
+
+.arrowRain{
+    position:fixed;
+    z-index:10000;
+    pointer-events:none;
+    font-size:30px;
+    animation:arrowFall .5s linear forwards;
+}
+
+@keyframes arrowFall{
+
+    from{
+        transform:translateY(-100px) rotate(20deg);
+        opacity:0;
+    }
+
+    30%{
+        opacity:1;
+    }
+
+    to{
+        transform:translateY(100px) rotate(20deg);
+        opacity:0;
+    }
+
+}
+
+
+/* EXECUTION */
+
+.executionEffect{
+    animation:executionPulse .3s infinite alternate !important;
+}
+
+@keyframes executionPulse{
+
+    from{
+        filter:brightness(1);
+        transform:scale(1);
+    }
+
+    to{
+        filter:brightness(2);
+        transform:scale(1.15);
+    }
+
+}
+.bossDamageNumber{
+    position:fixed;
+    z-index:10005;
+    pointer-events:none;
+
+    font-size:42px;
+    font-weight:900;
+
+    color:#ff3b30;
+
+    text-shadow:
+        0 0 4px white,
+        0 0 10px red,
+        0 0 20px darkred;
+
+    transform:translate(-50%,-50%);
+
+    animation:bossDamageAnim .8s ease-out forwards;
+}
+
+@keyframes bossDamageAnim{
+
+    0%{
+        transform:
+            translate(-50%,-50%)
+            scale(1.3);
+
+        opacity:1;
+    }
+
+    35%{
+        transform:
+            translate(-50%,-90%)
+            scale(1.1);
+
+        opacity:1;
+    }
+
+    100%{
+        transform:
+            translate(-50%,-170%)
+            scale(.9);
+
+        opacity:0;
+    }
+
+}
+@keyframes reviveMessage{
+
+    0%{
+
+        opacity:0;
+
+        transform:
+            translate(-50%, -50%)
+            scale(.5);
+
+    }
+
+    20%{
+
+        opacity:1;
+
+        transform:
+            translate(-50%, -50%)
+            scale(1.1);
+
+    }
+
+    70%{
+
+        opacity:1;
+
+        transform:
+            translate(-50%, -50%)
+            scale(1);
+
+    }
+
+    100%{
+
+        opacity:0;
+
+        transform:
+            translate(-50%, -50%)
+            scale(.9);
+
+    }
+
+}
+
+.playerHpText{
+    font-size:9px;
+    font-weight:normal;
+    color:#ffffff;
+    line-height:10px;
+    text-align:center;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="game">
+
+<div class="bossLevel" id="bossLevel">
+    BOSS LEVEL 1
+</div>
+
+    <div class="bossName" id="bossName">
+        👹 DEMON LORD
+    </div>
+
+    <div class="boss" id="boss">
+        👹
+    </div>
+
+    <div class="hpContainer">
+
+        <div class="hpBar">
+            <div class="hpFill" id="bossHpFill"></div>
+        </div>
+
+        <div class="hpText" id="bossHpText">
+            10.000 / 10.000 HP
+        </div>
+
+    </div>
+
+    <div class="eventBox" id="eventBox">
+        🔥 The battle has begun!
+    </div>
+
+
+    <div class="players" id="players"></div>
+
+    <div class="panelGrid">
+
+        <div class="panel">
+            <div class="panelTitle">📜 EVENTS</div>
+            <div class="panelText" id="events">
+                Battle started...
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panelTitle">🏆 TOP DAMAGE</div>
+            <div class="panelText" id="ranking">
+                —
+            </div>
+        </div>
+
+    </div>
+
+    <div class="stats">
+
+        <div class="stat">
+            <div class="statNumber" id="playerCount">0</div>
+            <div class="statLabel">PLAYERS</div>
+        </div>
+
+        <div class="stat">
+            <div class="statNumber" id="bossStat">1</div>
+            <div class="statLabel">BOSS</div>
+        </div>
+
+        <div class="stat">
+            <div class="statNumber" id="wins">0</div>
+            <div class="statLabel">WINS</div>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="victory" id="victory">
+
+    <div class="victoryBox" id="resultBox">
+
+        <div class="victoryTrophy">
+            🏆
+        </div>
+
+        <div class="victoryTitle" id="resultTitle">
+            BOSS DEFEATED!
+        </div>
+
+        <div class="victoryBoss" id="victoryBoss">
+            💀
+        </div>
+
+        <div id="victoryText">
+            NEXT BOSS IN 3
+        </div>
+
+    </div>
+
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+
+/* ============================================================
+   SETTINGS
+============================================================ */
+
+const MAX_PLAYERS = 30;
+const MAX_BOSSES = 100;
+/* ============================================================
+   🔊 AUDIO SYSTEM
+============================================================ */
+
+let audioContext = null;
+
+
+/* Create the audio system when needed */
+
+function initAudio(){
+
+    if(!audioContext){
+
+        audioContext =
+            new (window.AudioContext ||
+            window.webkitAudioContext)();
+
+    }
+
+
+    if(audioContext.state === "suspended"){
+
+        audioContext.resume();
+
+    }
+
+
+    /* =====================================
+       🎵 BACKGROUND MUSIC
+    ===================================== */
+
+    if(!window.battleMusic){
+
+        window.battleMusic =
+            new Audio("battlemusic.mp3");
+
+        window.battleMusic.loop = true;
+
+        window.battleMusic.volume = 0.50;
+
+        window.battleMusic.play()
+            .catch(()=>{});
+
+    }
+
+}
+
+
+/* ============================================================
+   ⚔️ SKILL SOUNDS
+============================================================ */
+
+function playSkillSound(skillText){
+
+    initAudio();
+
+
+    const now =
+        audioContext.currentTime;
+
+
+    /* =====================================
+       🛡️ TAUNT
+    ===================================== */
+
+    if(skillText === "TAUNT"){
+
+        const oscillator =
+            audioContext.createOscillator();
+
+        const gain =
+            audioContext.createGain();
+
+
+        oscillator.type =
+            "square";
+
+
+        oscillator.frequency.setValueAtTime(
+            180,
+            now
+        );
+
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+            90,
+            now + 0.18
+        );
+
+
+        gain.gain.setValueAtTime(
+            0.0001,
+            now
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.35,
+            now + 0.01
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + 0.20
+        );
+
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.20);
+
+
+        return;
+
+    }
+
+
+    /* =====================================
+       ⚔️ HEAVY STRIKE
+    ===================================== */
+
+    if(skillText === "HEAVY STRIKE"){
+
+        const oscillator =
+            audioContext.createOscillator();
+
+        const gain =
+            audioContext.createGain();
+
+
+        oscillator.type =
+            "sawtooth";
+
+
+        oscillator.frequency.setValueAtTime(
+            120,
+            now
+        );
+
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+            60,
+            now + 0.30
+        );
+
+
+        gain.gain.setValueAtTime(
+            0.0001,
+            now
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.45,
+            now + 0.02
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + 0.30
+        );
+
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.30);
+
+
+        return;
+
+    }
+
+
+    /* =====================================
+       🏹 ARROW RAIN
+    ===================================== */
+
+    if(skillText === "ARROW RAIN"){
+
+        for(let i = 0; i < 5; i++){
+
+            const oscillator =
+                audioContext.createOscillator();
+
+            const gain =
+                audioContext.createGain();
+
+
+            const startTime =
+                now + i * 0.07;
+
+
+            oscillator.type =
+                "triangle";
+
+
+            oscillator.frequency.setValueAtTime(
+                900,
+                startTime
+            );
+
+
+            oscillator.frequency.exponentialRampToValueAtTime(
+                300,
+                startTime + 0.10
+            );
+
+
+            gain.gain.setValueAtTime(
+                0.0001,
+                startTime
+            );
+
+
+            gain.gain.exponentialRampToValueAtTime(
+                0.18,
+                startTime + 0.01
+            );
+
+
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                startTime + 0.10
+            );
+
+
+            oscillator.connect(gain);
+            gain.connect(audioContext.destination);
+
+
+            oscillator.start(startTime);
+            oscillator.stop(startTime + 0.10);
+
+        }
+
+
+        return;
+
+    }
+
+
+    /* =====================================
+       ☄️ METEOR
+    ===================================== */
+
+    if(skillText === "METEOR"){
+
+        const oscillator =
+            audioContext.createOscillator();
+
+        const gain =
+            audioContext.createGain();
+
+
+        oscillator.type =
+            "sine";
+
+
+        oscillator.frequency.setValueAtTime(
+            90,
+            now
+        );
+
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+            700,
+            now + 0.45
+        );
+
+
+        gain.gain.setValueAtTime(
+            0.0001,
+            now
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.30,
+            now + 0.05
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + 0.55
+        );
+
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.55);
+
+
+        return;
+
+    }
+
+
+    /* =====================================
+       🥷 EXECUTION
+    ===================================== */
+
+    if(skillText === "EXECUTION"){
+
+        const oscillator =
+            audioContext.createOscillator();
+
+        const gain =
+            audioContext.createGain();
+
+
+        oscillator.type =
+            "sawtooth";
+
+
+        oscillator.frequency.setValueAtTime(
+            1200,
+            now
+        );
+
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+            180,
+            now + 0.18
+        );
+
+
+        gain.gain.setValueAtTime(
+            0.0001,
+            now
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.28,
+            now + 0.01
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + 0.20
+        );
+
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.20);
+
+
+        return;
+
+    }
+
+
+    /* =====================================
+       ✝️ RESURRECTION
+    ===================================== */
+
+    if(skillText === "RESURRECTION"){
+
+        const oscillator =
+            audioContext.createOscillator();
+
+        const gain =
+            audioContext.createGain();
+
+
+        oscillator.type =
+            "sine";
+
+
+        oscillator.frequency.setValueAtTime(
+            300,
+            now
+        );
+
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+            900,
+            now + 0.40
+        );
+
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+            1200,
+            now + 0.70
+        );
+
+
+        gain.gain.setValueAtTime(
+            0.0001,
+            now
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.25,
+            now + 0.05
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + 0.75
+        );
+
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.75);
+
+
+        return;
+
+    }
+
+}
+
+
+/* ============================================================
+   🖱️ FIRST CLICK ENABLES AUDIO
+============================================================ */
+
+document.addEventListener(
+    "click",
+    ()=>{
+
+        initAudio();
+
+    },
+    {once:true}
+);
+
+
+/* ============================================================
+   FIXED CLASS ICONS
+============================================================ */
+
+const classIcons = {
+
+    "TANK":"🛡️",
+
+    "WARRIOR":"⚔️",
+
+    "ARCHER":"🏹",
+
+    "MAGE":"🧙‍♂️",
+
+    "PRIEST":"✝️"
+
+};
+
+
+/* ============================================================
+   CLASSES
+============================================================ */
+
+const classes = [
+
+    {
+        name:"TANK",
+        damage:[25,45],
+        speed:3000,
+        hp:220
+    },
+
+    {
+        name:"WARRIOR",
+        damage:[50,80],
+        speed:2500,
+        hp:150
+    },
+
+    {
+        name:"ARCHER",
+        damage:[35,65],
+        speed:1000,
+        hp:90
+    },
+
+    {
+        name:"MAGE",
+        damage:[80,130],
+        speed:2800,
+        hp:85
+    },
+
+    {
+        name:"PRIEST",
+        damage:[0,0],
+        speed:4000,
+        hp:80
+    }
+
+];
+
+
+/* ============================================================
+   FORMATION ORDER
+============================================================ */
+
+const formationOrder = [
+
+    "TANK",
+    "WARRIOR",
+    "ARCHER",
+    "MAGE",
+    "PRIEST"
+
+];
+
+
+/* ============================================================
+   NOMES
+============================================================ */
+
+const playerNames = [
+
+    "Carlos",
+    "King",
+    "Julia",
+    "NinjaX",
+    "Shadow",
+    "Maria",
+    "Joao",
+    "Pedro",
+    "Ana",
+    "Lucas",
+    "Rafael",
+    "Bruno",
+    "Lari",
+    "Gamer",
+    "Player",
+    "Dragon",
+    "Leo",
+    "Max",
+    "Thor",
+    "Mika",
+    "Bia",
+    "Vini",
+    "Gui",
+    "Duda",
+    "Luan",
+    "Fox",
+    "Gael",
+    "Nando",
+    "Jota",
+    "Dark"
+
+];
+
+
+/* ============================================================
+   BOSSES
+============================================================ */
+
+const bossNames = [
+
+    "Demon Lord",
+    "Shadow Dragon",
+    "Death King",
+    "Void Monster",
+    "Inferno Titan",
+    "Lord of Darkness",
+    "Blood Emperor",
+    "Ancient Beast",
+    "Dark Overlord",
+    "Soul Eater",
+
+    "Storm King",
+    "Fire Colossus",
+    "Ice Tyrant",
+    "Thunder God",
+    "Doom Bringer",
+    "Nightmare Lord",
+    "Chaos Demon",
+    "Hell Walker",
+    "Skull King",
+    "Abyss Lord",
+
+    "Frost Serpent",
+    "Volcanic Behemoth",
+    "Plague Beast",
+    "Crystal Titan",
+    "Shadow Serpent",
+    "Lava Demon",
+    "Bone Dragon",
+    "Storm Serpent",
+    "Blood Kraken",
+    "Volcano Dragon",
+
+    "Frozen Behemoth",
+    "Infernal Beast",
+    "Void Dragon",
+    "Thunder Behemoth",
+    "Rotting Colossus",
+    "Dark Kraken",
+    "Flame Wyrm",
+    "Glacial Titan",
+    "Dread Spider",
+    "Abyssal Serpent",
+
+    "Ancient Golem",
+    "Molten Beast",
+    "Frozen Dragon",
+    "Chaos Hydra",
+    "Shadow Leviathan",
+    "Infernal Dragon",
+    "Storm Leviathan",
+    "Death Hydra",
+    "Void Leviathan",
+    "Apocalypse Beast"
+
+];
+
+const bossIcons = [
+
+    "😈",  // Demon Lord
+    "🐉",  // Shadow Dragon
+    "💀",  // Death King
+    "🕳️",  // Void Monster
+    "🌋",  // Inferno Titan
+    "🌑",  // Lord of Darkness
+    "🩸",  // Blood Emperor
+    "🦖",  // Ancient Beast
+    "👿",  // Dark Overlord
+    "👻",  // Soul Eater
+
+    "🌪️", // Storm King
+    "🔥",  // Fire Colossus
+    "❄️",  // Ice Tyrant
+    "⚡",  // Thunder God
+    "☠️",  // Doom Bringer
+    "🌙",  // Nightmare Lord
+    "👹",  // Chaos Demon
+    "🔥",  // Hell Walker
+    "💀",  // Skull King
+    "🌀",  // Abyss Lord
+
+    "🐍",  // Frost Serpent
+    "🌋",  // Volcanic Behemoth
+    "☣️",  // Plague Beast
+    "💎",  // Crystal Titan
+    "🐍",  // Shadow Serpent
+    "🌋",  // Lava Demon
+    "🦴",  // Bone Dragon
+    "🌪️", // Storm Serpent
+    "🐙",  // Blood Kraken
+    "🌋",  // Volcano Dragon
+
+    "🧊",  // Frozen Behemoth
+    "🔥",  // Infernal Beast
+    "🐉",  // Void Dragon
+    "⚡",  // Thunder Behemoth
+    "🦴",  // Rotting Colossus
+    "🐙",  // Dark Kraken
+    "🔥",  // Flame Wyrm
+    "🧊",  // Glacial Titan
+    "🕷️",  // Dread Spider
+    "🐍",  // Abyssal Serpent
+
+    "🗿",  // Ancient Golem
+    "🌋",  // Molten Beast
+    "🐉",  // Frozen Dragon
+    "🐍",  // Chaos Hydra
+    "🐋",  // Shadow Leviathan
+    "🐉",  // Infernal Dragon
+    "🌪️", // Storm Leviathan
+    "☠️",  // Death Hydra
+    "🌀",  // Void Leviathan
+    "☄️"   // Apocalypse Beast
+
+];
+/* ============================================================
+   BOSS GENERATOR
+============================================================ */
+
+function generateBoss(level){
+
+    /*
+       Use the same index so the Boss name
+       and icon always match.
+    */
+
+    const bossIndex =
+        Math.floor(
+            Math.random() *
+            bossNames.length
+        );
+
+    const name =
+        bossNames[bossIndex];
+
+    const icon =
+        bossIcons[bossIndex];
+
+    /*
+       Boss HP scaling.
+
+       Early Bosses:
+       Easier progression.
+
+       Later Bosses:
+       Much stronger exponential growth.
+    */
+
+    let hp;
+
+    if(level <= 10){
+
+        hp =
+            Math.floor(
+                7000 *
+                Math.pow(
+                    1.15,
+                    level - 1
+                )
+            );
+
+    }
+    else if(level <= 20){
+
+        hp =
+            Math.floor(
+                27000 *
+                Math.pow(
+                    1.18,
+                    level - 10
+                )
+            );
+
+    }
+    else if(level <= 30){
+
+        hp =
+            Math.floor(
+                165000 *
+                Math.pow(
+                    1.21,
+                    level - 20
+                )
+            );
+
+    }
+    else{
+
+        hp =
+            Math.floor(
+                1185000 *
+                Math.pow(
+                    1.24,
+                    level - 30
+                )
+            );
+
+    }
+
+    /*
+       Every 10 Bosses:
+       Special Boss gets +50% HP.
+    */
+
+    const special =
+        level % 10 === 0;
+
+    if(special){
+
+        hp =
+            Math.floor(
+                hp * 1.5
+            );
+
+    }
+
+    return {
+
+        name:name,
+        icon:icon,
+        hp:hp,
+        special:special
+
+    };
+
+}
+
+
+/* ============================================================
+   GAME STATE
+============================================================ */
+
+let bossLevel = 1;
+
+let currentBoss =
+    generateBoss(bossLevel);
+
+let maxBossHp =
+    currentBoss.hp;
+
+let bossHp =
+    maxBossHp;
+
+let wins = 0;
+
+let players = [];
+
+let nextPlayerId = 1;
+
+let battlePaused = false;
+
+/* A primeira sala recebida só carrega a partida já existente. */
+let hasReceivedInitialRoomState = false;
+
+
+/* ============================================================
+   🌐 MULTIPLAYER CONNECTION
+============================================================ */
+
+const multiplayerRoom =
+    "bossfight";
+
+const multiplayerSocket =
+    new WebSocket(
+        "wss://durable-chat-template.marcelcantagalo.workers.dev/parties/chat/" +
+        multiplayerRoom
+    );
+
+
+multiplayerSocket.onopen = () => {
+
+    console.log(
+        "🟢 MULTIPLAYER CONNECTED"
+    );
+
+
+    /* =====================================
+       🎮 SEND INITIAL GAME STATE
+    ===================================== */
+
+    if(
+        multiplayerSocket.readyState ===
+        WebSocket.OPEN
+    ){
+
+        multiplayerSocket.send(
+            JSON.stringify({
+
+                type:"initGame",
+
+                gameState:{
+
+                    bossLevel:
+                        bossLevel,
+
+                    currentBoss:
+                        currentBoss,
+
+                    maxBossHp:
+                        maxBossHp,
+
+                    bossHp:
+                        bossHp,
+
+                    wins:
+                        wins
+
+                }
+
+            })
+        );
+
+
+        console.log(
+            "🎮 INITIAL GAME STATE SENT:",
+            currentBoss.name
+        );
+
+    }
+
+};
+
+
+multiplayerSocket.onmessage = (event) => {
+
+    try{
+
+        const data =
+            JSON.parse(event.data);
+
+
+        console.log(
+            "📡 SERVER MESSAGE:",
+            data
+        );
+
+
+        /* =====================================
+           🌐 ESTADO DA SALA
+        ===================================== */
+
+        if(data.type === "roomState"){
 
     /* =====================================
        🔄 RESET OFICIAL DA BATALHA
@@ -28,63 +2673,3235 @@ if(data.type === "roomState"){
         }
     }
 
-console.log(
-"👥 PLAYERS IN ROOM:",
-data.players
-@@ -2973,7 +3000,10 @@
+    console.log(
+        "👥 PLAYERS IN ROOM:",
+        data.players
+    );
 
-healing:
-remotePlayer.healing ||
-                    0
+
+    /* =====================================
+       🎮 APLICA O ESTADO OFICIAL DA PARTIDA
+    ===================================== */
+
+    if(data.gameState){
+
+        const isInitialRoomState =
+            !hasReceivedInitialRoomState;
+
+        const previousBossLevel =
+            bossLevel;
+
+
+        bossLevel =
+            data.gameState.bossLevel;
+
+
+        currentBoss =
+            data.gameState.currentBoss;
+
+
+        maxBossHp =
+            data.gameState.maxBossHp;
+
+
+        bossHp =
+            data.gameState.bossHp;
+
+
+        wins =
+            data.gameState.wins;
+
+
+        console.log(
+            "🎮 OFFICIAL GAME STATE:",
+            data.gameState
+        );
+
+
+        /*
+           👑 NOVO BOSS OFICIAL
+
+           Quando o servidor avançar
+           para o próximo Boss, todas
+           as telas recebem este evento.
+        */
+
+        if(
+            !isInitialRoomState &&
+            bossLevel >
+            previousBossLevel
+        ){
+
+            console.log(
+                "👑 NEW OFFICIAL BOSS:",
+                bossLevel,
+                currentBoss.name
+            );
+
+
+            bossEnding = false;
+
+            battlePaused = true;
+
+
+            /*
+               Remove flash antigo.
+            */
+
+            flash.classList.remove(
+                "active"
+            );
+
+
+            /*
+               Mostra o novo Boss.
+            */
+
+            const titleElement =
+                document.getElementById(
+                    "resultTitle"
+                );
+
+
+            if(titleElement){
+
+                titleElement.textContent =
+                    "⚔️ NEXT BATTLE!";
+
+            }
+
+
+            victoryBoss.textContent =
+                currentBoss.icon;
+
+
+            victoryText.textContent =
+                currentBoss.name +
+                " — GET READY!";
+
+
+            const nextBossNameElement =
+                document.getElementById(
+                    "victoryNextBossName"
+                );
+
+
+            if(nextBossNameElement){
+
+                nextBossNameElement.textContent =
+                    currentBoss.name;
+
+            }
+
+
+            victory.classList.add(
+                "active"
+            );
+
+
+            /*
+               Após a entrada do Boss,
+               libera a batalha.
+            */
+
+            setTimeout(() => {
+
+                victory.classList.remove(
+                    "active"
+                );
+
+
+                battlePaused = false;
+
+
+                if(currentBoss.special){
+
+                    eventBox.textContent =
+                        "👑 LEGENDARY BOSS! " +
+                        currentBoss.name +
+                        " ENTERED THE ARENA!";
+
+
+                    addEvent(
+                        "👑 SPECIAL BOSS LV." +
+                        bossLevel
+                    );
+
+                }else{
+
+                    eventBox.textContent =
+                        "🔥 BOSS LEVEL " +
+                        bossLevel +
+                        " ENTERED THE ARENA!";
+
+
+                    addEvent(
+                        "🔥 New Boss LV." +
+                        bossLevel
+                    );
+
+                }
+
+
+                update();
+
+
+            },2500);
+
+        }
+
+        hasReceivedInitialRoomState = true;
+
+    }
+
+
+    /* =====================================
+       👥 JOGADORES
+    ===================================== */
+
+    data.players.forEach(
+        remotePlayer => {
+
+            /*
+               Procura o jogador local.
+            */
+
+            const localPlayer =
+                players.find(
+                    player =>
+                        !player.remoteId
+                );
+
+
+            /*
+               Se o servidor devolveu
+               o próprio jogador local,
+               vincula o ID do servidor.
+            */
+
+            if(
+                localPlayer &&
+                localPlayer.name ===
+                    remotePlayer.name &&
+                localPlayer.class ===
+                    remotePlayer.class
+            ){
+
+                localPlayer.remoteId =
+                    remotePlayer.id;
+
+
+                localPlayer.serverPosition =
+                    remotePlayer.position;
+
+
+                console.log(
+                    "✅ LOCAL PLAYER LINKED:",
+                    localPlayer.name
+                );
+
+
+                return;
+
+            }
+
+
+            /*
+               Verifica se o jogador remoto
+               já existe.
+            */
+
+            const alreadyExists =
+                players.some(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
+
+
+            if(alreadyExists){
+                return;
+            }
+
+
+            /*
+               Jogador realmente remoto.
+            */
+
+            const classData =
+                classes.find(
+                    c =>
+                        c.name ===
+                        remotePlayer.class
+                );
+
+
+            if(!classData){
+                return;
+            }
+
+
+            const remotePlayerObject = {
+
+                id:
+                    nextPlayerId++,
+
+                remoteId:
+                    remotePlayer.id,
+
+                serverPosition:
+                    remotePlayer.position,
+
+                name:
+                    remotePlayer.name,
+
+                class:
+                    remotePlayer.class,
+
+                icon:
+                    classIcons[
+                        remotePlayer.class
+                    ],
+
+                damage:[
+                    classData.damage[0],
+                    classData.damage[1]
+                ],
+
+                speed:
+                    classData.speed,
+
+                level:
+                    remotePlayer.level ||
+                    1,
+
+                xp:
+                    remotePlayer.xp ||
+                    0,
+
+                nextXp:
+                    100,
+
+                maxHp:
+                    remotePlayer.maxHp ||
+                    classData.hp,
+
+                hp:
+                    remotePlayer.hp ??
+                    classData.hp,
+
+                alive:
+                    remotePlayer.alive ??
+                    true,
+
+                totalDamage:
+                    remotePlayer.totalDamage ||
+                    0,
+
+                healing:
+                    remotePlayer.healing ||
                     0,
 
                 isAI:
                     remotePlayer.isAI === true
 
-};
+            };
 
-@@ -3086,7 +3116,10 @@
 
-totalDamage:0,
+            players.push(
+                remotePlayerObject
+            );
 
-                healing:0
+
+            createPlayerUI(
+                remotePlayerObject
+            );
+
+
+            addEvent(
+                remotePlayerObject.icon +
+                " " +
+                remotePlayerObject.name +
+                " joined!"
+            );
+
+        }
+    );
+
+
+    update();
+
+}
+
+
+        /* =====================================
+           ⚔️ NOVO JOGADOR ENTROU
+        ===================================== */
+
+        else if(data.type === "playerJoined"){
+
+            const remotePlayer =
+                data.player;
+
+
+            const alreadyExists =
+                players.some(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
+
+
+            if(alreadyExists){
+                return;
+            }
+
+
+            const classData =
+                classes.find(
+                    c =>
+                        c.name ===
+                        remotePlayer.class
+                );
+
+
+            if(!classData){
+                return;
+            }
+
+
+            const newRemotePlayer = {
+
+                id:
+                    nextPlayerId++,
+
+                remoteId:
+                    remotePlayer.id,
+
+                serverPosition:
+                    remotePlayer.position,
+
+                name:
+                    remotePlayer.name,
+
+                class:
+                    remotePlayer.class,
+
+                icon:
+                    classIcons[
+                        remotePlayer.class
+                    ],
+
+                damage:[
+                    classData.damage[0],
+                    classData.damage[1]
+                ],
+
+                speed:
+                    classData.speed,
+
+                level:1,
+
+                xp:0,
+
+                nextXp:100,
+
+                maxHp:
+                    classData.hp,
+
+                hp:
+                    classData.hp,
+
+                alive:true,
+
+                totalDamage:0,
+
                 healing:0,
 
                 isAI:
                     remotePlayer.isAI === true
 
+            };
+
+
+            players.push(
+                newRemotePlayer
+            );
+
+
+            createPlayerUI(
+                newRemotePlayer
+            );
+
+
+            eventBox.textContent =
+                newRemotePlayer.icon +
+                " " +
+                newRemotePlayer.name +
+                " joined the battle!";
+
+
+            addEvent(
+                newRemotePlayer.icon +
+                " " +
+                newRemotePlayer.name +
+                " joined!"
+            );
+
+
+            update();
+
+        }
+
+
+        /* =====================================
+           🔴 JOGADOR SAIU
+        ===================================== */
+
+        else if(data.type === "playerLeft"){
+
+            const playerIndex =
+                players.findIndex(
+                    player =>
+                        player.remoteId ===
+                        data.playerId
+                );
+
+
+            if(playerIndex === -1){
+                return;
+            }
+
+
+            const player =
+                players[playerIndex];
+
+
+            const element =
+                document.getElementById(
+                    "player-" + player.id
+                );
+
+
+            if(element){
+                element.remove();
+            }
+
+
+            players.splice(
+                playerIndex,
+                1
+            );
+
+
+            addEvent(
+                "🔴 " +
+                player.name +
+                " left the battle!"
+            );
+
+
+            update();
+
+        }
+
+
+        /* =====================================
+           🔄 PLAYER UPDATED
+        ===================================== */
+
+        else if(data.type === "playerUpdated"){
+
+            const remotePlayer =
+                data.player;
+
+
+            const localPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
+
+
+            if(!localPlayer){
+                return;
+            }
+
+
+            Object.assign(
+                localPlayer,
+                remotePlayer
+            );
+
+
+            update();
+
+        }
+
+
+        /* =====================================
+           ⚔️ RESULTADO DO ATAQUE
+        ===================================== */
+
+        else if(data.type === "attackResult"){
+
+            /*
+               Procura o jogador que realizou
+               o ataque.
+            */
+
+            const attackingPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.playerId
+                );
+
+
+            if(!attackingPlayer){
+                return;
+            }
+
+
+            /* =====================================
+               🎯 ATUALIZA BOSS OFICIAL
+            ===================================== */
+
+            bossHp =
+                data.bossHp;
+
+
+            maxBossHp =
+                data.maxBossHp;
+
+
+            /* =====================================
+               💥 MISS
+            ===================================== */
+
+            if(!data.hit){
+
+                const bossRect =
+                    bossElement.getBoundingClientRect();
+
+
+                const missText =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                missText.textContent =
+                    "MISS";
+
+
+                missText.style.position =
+                    "fixed";
+
+
+                missText.style.left =
+                    (
+                        bossRect.left +
+                        bossRect.width / 2 -
+                        25
+                    ) + "px";
+
+
+                missText.style.top =
+                    (
+                        bossRect.top +
+                        bossRect.height / 2 -
+                        35
+                    ) + "px";
+
+
+                missText.style.color =
+                    "#aaaaaa";
+
+
+                missText.style.fontSize =
+                    "18px";
+
+
+                missText.style.fontWeight =
+                    "900";
+
+
+                missText.style.textShadow =
+                    "0 1px 3px #000";
+
+
+                missText.style.zIndex =
+                    "9999";
+
+
+                missText.style.pointerEvents =
+                    "none";
+
+
+                document.body.appendChild(
+                    missText
+                );
+
+
+                eventBox.textContent =
+                    attackingPlayer.name +
+                    " missed the attack";
+
+
+                addEvent(
+                    attackingPlayer.name +
+                    " missed the attack"
+                );
+
+
+                const missSound =
+                    new Audio(
+                        "miss.mp3"
+                    );
+
+
+                missSound.volume =
+                    0.7;
+
+
+                missSound.play()
+                    .catch(()=>{});
+
+
+                setTimeout(
+                    () => {
+
+                        missText.remove();
+
+                    },
+                    700
+                );
+
+
+                update();
+
+
+                return;
+
+            }
+
+
+            /* =====================================
+               💥 ATUALIZA DANO DO JOGADOR
+            ===================================== */
+
+            attackingPlayer.totalDamage =
+                data.totalDamage;
+
+
+            /*
+               Mantém o nível informado
+               pelo servidor.
+            */
+
+            if(
+                typeof data.level ===
+                "number"
+            ){
+
+                attackingPlayer.level =
+                    data.level;
+
+            }
+
+
+            /* =====================================
+               🚀 PROJECTILE
+            ===================================== */
+
+            launchProjectile(
+                attackingPlayer
+            );
+
+
+            /* =====================================
+               ⭐ CRITICAL
+            ===================================== */
+
+            if(data.critical){
+
+                eventBox.textContent =
+                    "💥 CRITICAL! " +
+                    attackingPlayer.name +
+                    " dealt " +
+                    data.damage.toLocaleString(
+                        "en-US"
+                    ) +
+                    " damage!";
+
+
+            }
+
+            else{
+
+                eventBox.textContent =
+                    attackingPlayer.icon +
+                    " " +
+                    attackingPlayer.name +
+                    " dealt " +
+                    data.damage.toLocaleString(
+                        "en-US"
+                    ) +
+                    " damage!";
+
+            }
+
+
+            addEvent(
+                attackingPlayer.name +
+                " dealt " +
+                data.damage.toLocaleString(
+                    "en-US"
+                ) +
+                " damage!"
+            );
+
+
+            /* =====================================
+               ⚔️ ATTACK ANIMATION
+            ===================================== */
+
+            const attackingElement =
+                document.getElementById(
+                    "player-" +
+                    attackingPlayer.id
+                );
+
+
+            if(attackingElement){
+
+                attackingElement.classList.add(
+                    "attacking"
+                );
+
+
+                setTimeout(
+                    () => {
+
+                        attackingElement.classList.remove(
+                            "attacking"
+                        );
+
+                    },
+                    350
+                );
+
+            }
+
+
+            /* =====================================
+               UPDATE
+            ===================================== */
+
+            update();
+
+        }
+
+        /* =====================================
+           👹 ATAQUE OFICIAL DO BOSS
+           O Worker já decidiu alvo, dano e HP.
+        ===================================== */
+
+        else if(data.type === "bossAttackResult"){
+
+            const targetPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.targetId
+                );
+
+            if(!targetPlayer){
+                return;
+            }
+
+            const wasAlive = targetPlayer.alive;
+
+            targetPlayer.hp = data.hp;
+            targetPlayer.maxHp = data.maxHp;
+            targetPlayer.alive = data.alive;
+
+            /* =====================================
+               💀 CHECK GAME OVER — OFFICIAL BOSS HIT
+               The Worker has just confirmed the death.
+            ===================================== */
+
+            const alivePlayersAfterBossHit =
+                players.filter(
+                    player => player.alive
+                );
+
+            if(
+                wasAlive &&
+                !targetPlayer.alive &&
+                alivePlayersAfterBossHit.length === 0
+            ){
+
+                bossEnding = true;
+                battlePaused = true;
+
+                const trophyElement =
+                    victory.querySelector(
+                        ".victoryTrophy"
+                    );
+
+                if(trophyElement){
+                    trophyElement.style.display =
+                        "none";
+                }
+
+                /* =====================================
+                   💀 GAME OVER SOUND — 3X
+                ===================================== */
+
+                const gameOverSound1 =
+                    new Audio("gameover.mp3");
+
+                const gameOverSound2 =
+                    new Audio("gameover.mp3");
+
+                const gameOverSound3 =
+                    new Audio("gameover.mp3");
+
+                gameOverSound1.volume = 1.0;
+                gameOverSound2.volume = 1.0;
+                gameOverSound3.volume = 1.0;
+
+                gameOverSound1.play()
+                    .catch(()=>{});
+
+                gameOverSound2.play()
+                    .catch(()=>{});
+
+                gameOverSound3.play()
+                    .catch(()=>{});
+
+                /* =====================================
+                   😈 GAME OVER LAUGH
+                ===================================== */
+
+                setTimeout(() => {
+
+                    const gameOverLaugh =
+                        new Audio("gameoverlaugh.mp3");
+
+                    gameOverLaugh.volume = 1.0;
+
+                    gameOverLaugh.play()
+                        .catch(()=>{});
+
+                },2000);
+
+                /* =====================================
+                   ☠️ GAME OVER SCREEN
+                ===================================== */
+
+                const titleElement =
+                    victory.querySelector(
+                        ".victoryTitle"
+                    );
+
+                if(titleElement){
+                    titleElement.textContent =
+                        "GAME OVER";
+                }
+
+                victoryBoss.textContent =
+                    "💀";
+
+                victoryText.textContent =
+                    "NEW BATTLE IN 10";
+
+                victory.classList.add(
+                    "gameOver"
+                );
+
+                victory.classList.add(
+                    "active"
+                );
+
+                flash.classList.add(
+                    "active"
+                );
+
+                eventBox.textContent =
+                    "💀 THE BOSS WON! NEW BATTLE IN 10 SECONDS!";
+
+                addEvent(
+                    "💀 GAME OVER!"
+                );
+
+                /* =====================================
+                   ⏱️ COUNTDOWN FOR NEW BATTLE
+                ===================================== */
+
+                let countdown = 10;
+
+                const restartInterval =
+                    setInterval(() => {
+
+                        countdown--;
+
+                        if(countdown > 0){
+
+                            victoryText.textContent =
+                                "NEW BATTLE IN " +
+                                countdown;
+
+                        }
+                        else{
+
+                            clearInterval(
+                                restartInterval
+                            );
+
+                            victory.classList.remove(
+                                "active"
+                            );
+
+                            victory.classList.remove(
+                                "gameOver"
+                            );
+
+                            flash.classList.remove(
+                                "active"
+                            );
+
+                            bossEnding = false;
+
+                            battlePaused = false;
+
+                            /*
+                               O fluxo normal de reinício
+                               existente continua sendo
+                               executado pelo código original.
+                            */
+
+                        }
+
+                    },1000);
+
+            }
+
+            const bossHitSound =
+                new Audio("golpeboss.mp3");
+
+            bossHitSound.volume = 0.9;
+
+            bossHitSound.play()
+                .catch(()=>{});
+
+            if(wasAlive && !targetPlayer.alive){
+
+                const deathSounds = {
+                    TANK:"tankmorto.mp3",
+                    WARRIOR:"guerreiromorto.mp3",
+                    ARCHER:"archermorto.mp3",
+                    MAGE:"magomorto.mp3",
+                    PRIEST:"healermorto.mp3"
+                };
+
+                const deathSoundFile =
+                    deathSounds[targetPlayer.class];
+
+                if(deathSoundFile){
+
+                    const deathSound =
+                        new Audio(deathSoundFile);
+
+                    deathSound.volume = 0.9;
+
+                    deathSound.play()
+                        .catch(()=>{});
+
+                }
+
+            }
+
+            const targetElement =
+                document.getElementById(
+                    "player-" + targetPlayer.id
+                );
+
+            if(targetElement){
+
+                targetElement.classList.add(
+                    "battleHit"
+                );
+
+                setTimeout(() => {
+                    targetElement.classList.remove(
+                        "battleHit"
+                    );
+                },250);
+
+                const rect =
+                    targetElement.getBoundingClientRect();
+
+                const damageText =
+                    document.createElement("div");
+
+                damageText.className =
+                    "bossDamageNumber";
+
+                damageText.textContent =
+                    "-" + data.damage;
+
+                damageText.style.left =
+                    (rect.left + rect.width / 2) + "px";
+
+                damageText.style.top =
+                    (rect.top + rect.height / 2) + "px";
+
+                document.body.appendChild(damageText);
+
+                setTimeout(() => {
+                    damageText.remove();
+                },800);
+
+            }
+
+            eventBox.textContent =
+                data.spellIcon +
+                " " +
+                data.spellName +
+                "! " +
+                targetPlayer.name +
+                " lost " +
+                data.damage +
+                " HP";
+
+            addEvent(
+                data.spellIcon +
+                " " +
+                data.spellName +
+                " hit " +
+                targetPlayer.name
+            );
+
+            update();
+
+        }
+
+        /* =====================================
+           💚 CURA OFICIAL DO PRIEST
+        ===================================== */
+
+        else if(data.type === "healResult"){
+
+            const healer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.healerId
+                );
+
+            const target =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.targetId
+                );
+
+            if(!healer || !target){
+                return;
+            }
+
+            target.hp = data.hp;
+            target.maxHp = data.maxHp;
+            target.alive = data.alive;
+            healer.healing = data.healerHealing;
+
+            const targetElement =
+                document.getElementById(
+                    "player-" + target.id
+                );
+
+            if(targetElement){
+
+                targetElement.classList.add("healing");
+
+                const rect =
+                    targetElement.getBoundingClientRect();
+
+                const healText =
+                    document.createElement("div");
+
+                healText.className =
+                    "damageNumber healNumber";
+                healText.textContent = "+" + data.heal + " HP";
+                healText.style.left =
+                    (rect.left + rect.width / 2) + "px";
+                healText.style.top =
+                    (rect.top + rect.height / 2) + "px";
+
+                document.body.appendChild(healText);
+
+                setTimeout(() => {
+                    targetElement.classList.remove("healing");
+                    healText.remove();
+                },800);
+
+            }
+
+            const healerElement =
+                document.getElementById(
+                    "player-" + healer.id
+                );
+
+            if(healerElement){
+
+                healerElement.classList.add("healerCast");
+
+                setTimeout(() => {
+                    healerElement.classList.remove("healerCast");
+                },600);
+
+            }
+
+            eventBox.textContent =
+                "💚 " +
+                healer.name +
+                " HEALED " +
+                target.name +
+                " FOR +" +
+                data.heal +
+                " HP";
+
+            addEvent(eventBox.textContent);
+
+            update();
+
+        }
+
+    }
+    catch(error){
+
+        console.error(
+            "❌ MULTIPLAYER MESSAGE ERROR:",
+            error
+        );
+
+    }
+
 };
 
-@@ -5864,31 +5897,32 @@
-                      CLEAR ALL PLAYERS
-                   ========================= */
 
-                    players.length = 0;
+multiplayerSocket.onerror = (error) => {
 
-                    playersContainer.innerHTML = "";
+    console.error(
+        "❌ MULTIPLAYER CONNECTION ERROR:",
+        error
+    );
+
+};
 
 
-                    bossLevel = 1;
+multiplayerSocket.onclose = () => {
+
+    console.log(
+        "🔴 MULTIPLAYER DISCONNECTED"
+    );
+
+};
 
 
-                    currentBoss =
-                        generateBoss(
-                            bossLevel
+/* ============================================================
+   ELEMENTOS
+============================================================ */
+
+const bossElement =
+    document.getElementById("boss");
+
+const bossHpFill =
+    document.getElementById("bossHpFill");
+
+const bossHpText =
+    document.getElementById("bossHpText");
+
+const bossNameElement =
+    document.getElementById("bossName");
+
+const bossLevelElement =
+    document.getElementById("bossLevel");
+
+const eventBox =
+    document.getElementById("eventBox");
+
+const playersContainer =
+    document.getElementById("players");
+
+const rankingElement =
+    document.getElementById("ranking");
+
+const eventsElement =
+    document.getElementById("events");
+
+const victory =
+    document.getElementById("victory");
+
+const victoryBoss =
+    document.getElementById("victoryBoss");
+
+const victoryText =
+    document.getElementById("victoryText");
+
+const flash =
+    document.getElementById("flash");
+
+
+/* ============================================================
+   EVENTS
+============================================================ */
+
+let eventHistory = [];
+
+
+function addEvent(text){
+
+    eventHistory.unshift(text);
+
+    if(eventHistory.length > 5){
+
+        eventHistory.pop();
+
+    }
+
+    eventsElement.innerHTML =
+        eventHistory.join("<br>");
+
+}
+
+
+/* ============================================================
+   CHOOSE CLASS
+============================================================ */
+
+function randomClass(){
+
+    /*
+       Priest has approximately a 15% chance.
+    */
+
+    if(Math.random() < 0.15){
+
+        return classes.find(
+            c => c.name === "PRIEST"
+        );
+
+    }
+
+    /*
+       The other 85% are distributed
+       among Tank, Warrior, Archer and Mage.
+    */
+
+    const normalClasses =
+        classes.filter(
+            c => c.name !== "PRIEST" &&
+                 c.name !== "ASSASSIN"
+        );
+
+    return normalClasses[
+        Math.floor(
+            Math.random() * normalClasses.length
+        )
+    ];
+
+}
+
+
+/* ============================================================
+   CREATE PLAYER
+============================================================ */
+
+function createPlayer(){
+
+    /* =====================================
+       🎯 CLASSES DISPONÍVEIS
+       Máximo de 5 jogadores por classe
+    ===================================== */
+
+    const availableClasses =
+        classes.filter(playerClass => {
+
+            const classCount =
+                players.filter(
+                    player =>
+                        player.class === playerClass.name
+                ).length;
+
+            return classCount < 5;
+
+        });
+
+
+    /*
+       Todas as classes já estão cheias.
+    */
+
+    if(availableClasses.length === 0){
+
+        return;
+
+    }
+
+
+    /*
+       Escolhe aleatoriamente somente
+       entre as classes que ainda têm vaga.
+    */
+
+    const playerClass =
+        availableClasses[
+            Math.floor(
+                Math.random() *
+                availableClasses.length
+            )
+        ];
+
+
+    /* =====================================
+       👤 NOME ÚNICO
+    ===================================== */
+
+    const usedNames =
+        new Set(
+            players.map(
+                player =>
+                    player.name
+            )
+        );
+
+
+    const availableNames =
+        playerNames.filter(
+            name =>
+                !usedNames.has(name)
+        );
+
+
+    let playerName;
+
+
+    if(availableNames.length > 0){
+
+        playerName =
+            availableNames[
+                Math.floor(
+                    Math.random() *
+                    availableNames.length
+                )
+            ];
+
+    }else{
+
+        playerName =
+            "Player" +
+            nextPlayerId;
+
+    }
+
+
+    const player = {
+
+        id:nextPlayerId++,
+
+
+        name:
+            playerName,
+
+
+        class:
+            playerClass.name,
+
+
+        icon:
+            classIcons[playerClass.name],
+
+
+        damage:[
+            playerClass.damage[0],
+            playerClass.damage[1]
+        ],
+
+
+        speed:
+            playerClass.speed,
+
+
+        level:1,
+
+
+        xp:0,
+
+
+        nextXp:100,
+
+
+        maxHp:
+            playerClass.hp,
+
+
+        hp:
+            playerClass.hp,
+
+
+        alive:true,
+
+
+        totalDamage:0,
+
+
+        healing:0
+
+    };
+
+
+    players.push(player);
+
+
+    createPlayerUI(player);
+
+
+    eventBox.textContent =
+        player.icon +
+        " " +
+        player.name +
+        " joined as " +
+        player.class;
+
+
+    addEvent(
+        player.icon +
+        " " +
+        player.name +
+        " joined!"
+    );
+
+
+    update();
+
+
+    /* =====================================
+       🌐 SEND PLAYER TO SERVER
+    ===================================== */
+
+    function sendPlayerToServer(){
+
+        if(
+            multiplayerSocket.readyState ===
+            WebSocket.OPEN
+        ){
+
+            multiplayerSocket.send(
+                JSON.stringify({
+
+                    type:"join",
+
+                    name:player.name,
+
+                    class:player.class
+
+                })
+            );
+
+
+            console.log(
+                "⚔️ PLAYER SENT TO SERVER:",
+                player.name,
+                player.class
+            );
+
+
+            return;
+
+        }
+
+
+        /*
+           Wait until WebSocket connects.
+        */
+
+        if(
+            multiplayerSocket.readyState ===
+            WebSocket.CONNECTING
+        ){
+
+            setTimeout(
+                sendPlayerToServer,
+                100
+            );
+
+        }
+
+    }
+
+
+    sendPlayerToServer();
+
+    // ===== INICIA O ATAQUE AUTOMÁTICO DO JOGADOR =====
+    startPlayerAI(player);
+}
+
+
+/* ============================================================
+   CREATE PLAYER UI
+============================================================ */
+
+function createPlayerUI(player){
+
+    const element =
+        document.createElement("div");
+
+
+    element.className =
+        "player";
+
+
+    element.id =
+        "player-" + player.id;
+
+
+    const characterImages = {
+
+        "TANK":"tank.png",
+        "WARRIOR":"warrior.png",
+        "ARCHER":"archer.png",
+        "MAGE":"mage.png",
+        "PRIEST":"priest.png"
+
+    };
+
+
+    element.innerHTML = `
+
+        <div class="playerIcon">
+
+            <img
+                src="${characterImages[player.class]}"
+                alt="${player.class}"
+                style="
+                    width:80px;
+                    height:80px;
+                    object-fit:contain;
+                    display:block;
+                    margin:auto;
+                "
+            >
+
+        </div>
+
+        <div class="playerName">
+            ${player.name}
+        </div>
+
+        <div class="playerClass">
+            ${player.class}
+        </div>
+
+        <div class="playerLevel">
+            LV.${player.level}
+        </div>
+
+        <div class="playerHp">
+
+            <div
+                class="playerHpFill"
+                id="hp-${player.id}">
+            </div>
+
+        </div>
+
+        <div class="playerXp">
+
+            <div
+                class="playerXpFill"
+                id="xp-${player.id}">
+            </div>
+
+        </div>
+
+    `;
+
+
+    /*
+       NÃO adiciona diretamente ao container.
+
+       A sortFormation() vai colocar
+       o jogador no lugar correto.
+    */
+
+}
+
+
+/* ============================================================
+   UPDATE PLAYER
+============================================================ */
+
+function updatePlayerUI(player){
+
+    const hp =
+        document.getElementById(
+            "hp-" + player.id
+        );
+
+    const xp =
+        document.getElementById(
+            "xp-" + player.id
+        );
+
+    const element =
+        document.getElementById(
+            "player-" + player.id
+        );
+
+    if(!hp || !xp || !element){
+
+        return;
+
+    }
+
+
+    hp.style.width =
+        Math.max(
+            0,
+            (player.hp/player.maxHp)*100
+        ) + "%";
+
+
+    xp.style.width =
+        Math.min(
+            100,
+            (player.xp/player.nextXp)*100
+        ) + "%";
+
+
+    element.querySelector(
+        ".playerLevel"
+    ).textContent =
+        "LV." + player.level;
+
+
+    /* ❤️ HP AS A NUMBER */
+
+    let hpText =
+        element.querySelector(
+            ".playerHpText"
+        );
+
+
+    if(!hpText){
+
+        hpText =
+            document.createElement("div");
+
+        hpText.className =
+            "playerHpText";
+
+        element.querySelector(
+            ".playerHp"
+        ).after(hpText);
+
+    }
+
+
+    hpText.textContent =
+        player.hp +
+        " / " +
+        player.maxHp;
+
+
+    if(player.alive){
+
+        element.classList.remove("dead");
+
+    }else{
+
+        element.classList.add("dead");
+
+    }
+    
+
+}
+
+
+/* ============================================================
+   REORGANIZE FORMATION
+============================================================ */
+
+/* ============================================================
+   FORMATION DOS PLAYERS
+============================================================ */
+
+function sortFormation(){
+
+    /*
+       Character images.
+    */
+
+    const characterImages = {
+
+        "TANK":"tank.png",
+        "WARRIOR":"warrior.png",
+        "ARCHER":"archer.png",
+        "MAGE":"mage.png",
+        "PRIEST":"priest.png"
+
+    };
+
+
+    /*
+       Organize players by class.
+    */
+
+    players.sort((a,b)=>{
+
+        return formationOrder.indexOf(a.class)
+             -
+               formationOrder.indexOf(b.class);
+
+    });
+
+
+    /*
+       Rebuild the visual formation.
+    */
+
+    playersContainer.innerHTML = "";
+
+
+    let currentClass = null;
+    let row = null;
+
+
+    players.forEach(player => {
+
+        /*
+           Create a new row whenever
+           the class changes.
+
+           No class title is displayed.
+        */
+
+        if(player.class !== currentClass){
+
+            currentClass =
+                player.class;
+
+
+            row =
+                document.createElement("div");
+
+
+            row.className =
+                "row";
+
+
+            playersContainer.appendChild(
+                row
+            );
+
+        }
+
+
+        /*
+           Wrapper containing
+           player name and card.
+        */
+
+        const wrapper =
+            document.createElement("div");
+
+
+        wrapper.style.display =
+            "flex";
+
+
+        wrapper.style.flexDirection =
+            "column";
+
+
+        wrapper.style.alignItems =
+            "center";
+
+
+        wrapper.style.position =
+            "relative";
+
+
+        /*
+           Player name above card.
+           Maximum 10 characters.
+        */
+
+        const playerName =
+            document.createElement("div");
+
+
+        playerName.className =
+            "playerName";
+
+
+        playerName.textContent =
+            player.name.substring(
+                0,
+                8
+            );
+
+
+        playerName.style.fontSize =
+            "11px";
+
+
+        playerName.style.fontWeight =
+            "900";
+
+
+        playerName.style.color =
+            "#ffffff";
+
+
+        playerName.style.textAlign =
+            "center";
+
+
+        playerName.style.marginBottom =
+            "2px";
+
+
+        playerName.style.height =
+            "14px";
+
+
+        playerName.style.whiteSpace =
+            "nowrap";
+
+
+        playerName.style.textShadow =
+            "0 1px 3px #000";
+
+
+        wrapper.appendChild(
+            playerName
+        );
+
+
+        /*
+           Player card.
+        */
+
+        const element =
+            document.createElement("div");
+
+
+        element.className =
+            "player";
+
+
+        element.id =
+            "player-" + player.id;
+
+
+        /*
+           Priest class.
+        */
+
+        if(player.class === "PRIEST"){
+
+            element.classList.add(
+                "priest"
+            );
+
+        }
+
+
+        /*
+           Dead players.
+        */
+
+        if(!player.alive){
+
+            element.classList.add(
+                "dead"
+            );
+
+        }
+
+
+        /*
+           Player visual.
+        */
+
+        element.innerHTML = `
+
+            <div class="playerIcon">
+
+                <img
+                    src="${characterImages[player.class]}"
+                    alt="${player.class}"
+                    style="
+                        width:60px;
+                        height:65px;
+                        object-fit:contain;
+                        display:block;
+                        margin:auto;
+                    "
+                >
+
+            </div>
+
+            <div class="playerLevel">
+                LV.${player.level}
+            </div>
+
+            <div class="playerHp">
+
+                <div
+                    class="playerHpFill"
+                    id="hp-${player.id}">
+                </div>
+
+            </div>
+
+            <div class="playerXp">
+
+                <div
+                    class="playerXpFill"
+                    id="xp-${player.id}">
+                </div>
+
+            </div>
+
+        `;
+
+
+        wrapper.appendChild(
+            element
+        );
+
+
+        row.appendChild(
+            wrapper
+        );
+
+
+        updatePlayerUI(
+            player
+        );
+
+    });
+
+
+    /*
+       Start the revive request system
+       only once.
+    */
+
+    if(!window.reviveHelpStarted){
+
+        window.reviveHelpStarted = true;
+
+
+        setInterval(() => {
+
+            const currentPriests =
+                players.filter(
+                    player =>
+                        player.alive &&
+                        player.class === "PRIEST"
+                );
+
+
+            if(currentPriests.length === 0){
+
+                return;
+
+            }
+
+
+            const deadPlayers =
+                players.filter(
+                    player =>
+                        !player.alive
+                );
+
+
+            deadPlayers.forEach(
+                deadPlayer => {
+
+                    const element =
+                        document.getElementById(
+                            "player-" +
+                            deadPlayer.id
                         );
 
 
-                    maxBossHp =
-                        currentBoss.hp;
+                    if(!element){
+
+                        return;
+
+                    }
 
 
-                    bossHp =
-                        maxBossHp;
+                    /*
+                       Remove old HELP messages.
+                    */
+
+                    element
+                        .querySelectorAll(
+                            ".reviveRequest"
+                        )
+                        .forEach(
+                            request =>
+                                request.remove()
+                        );
 
 
-bossEnding = false;
+                    /*
+                       Choose one random Priest.
+                    */
+
+                    const randomPriest =
+                        currentPriests[
+                            Math.floor(
+                                Math.random() *
+                                currentPriests.length
+                            )
+                        ];
+
+
+                    const reviveRequest =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    reviveRequest.className =
+                        "reviveRequest";
+
+
+                    reviveRequest.textContent =
+                        "HELP, " +
+                        randomPriest.name +
+                        "!";
+
+
+                    reviveRequest.style.position =
+                        "absolute";
+
+
+                    reviveRequest.style.left =
+                        "50%";
+
+
+                    reviveRequest.style.top =
+                        "50%";
+
+
+                    reviveRequest.style.width =
+                        "100%";
+
+
+                    reviveRequest.style.textAlign =
+                        "center";
+
+
+                    reviveRequest.style.fontSize =
+                        "11px";
+
+
+                    reviveRequest.style.fontWeight =
+                        "900";
+
+
+                    reviveRequest.style.color =
+                        "#ffffff";
+
+
+                    reviveRequest.style.textShadow =
+                        "0 0 5px #000";
+
+
+                    reviveRequest.style.zIndex =
+                        "20";
+
+
+                    reviveRequest.style.pointerEvents =
+                        "none";
+
+
+                    reviveRequest.style.animation =
+                        "reviveMessage 2s ease-out forwards";
+
+
+                    element.appendChild(
+                        reviveRequest
+                    );
+
+
+                    setTimeout(() => {
+
+                        reviveRequest.remove();
+
+                    },2000);
+
+                }
+            );
+
+        },5000);
+
+    }
+
+}
+
+/* ============================================================
+   GAIN XP
+============================================================ */
+
+function gainXp(player,amount){
+
+    player.xp += amount;
+
+
+    while(
+        player.xp >= player.nextXp
+    ){
+
+        player.xp -=
+            player.nextXp;
+
+
+        player.level++;
+
+
+        player.nextXp =
+            Math.floor(
+                100 *
+                Math.pow(
+                    1.30,
+                    player.level - 1
+                )
+            );
+
+
+        /* =====================================
+           📈 CLASS PROGRESSION
+        ===================================== */
+
+        let hpGrowth = 0;
+        let damageGrowth = 0;
+        let speedGrowth = 0;
+        let healingGrowth = 0;
+
+
+        if(player.class === "TANK"){
+
+            hpGrowth = 0.05;
+            damageGrowth = 0.01;
+            speedGrowth = 0.003;
+
+        }
+
+
+        else if(player.class === "WARRIOR"){
+
+            hpGrowth = 0.06;
+            damageGrowth = 0.01;
+            speedGrowth = 0.003;
+
+        }
+
+
+        else if(player.class === "ARCHER"){
+
+            hpGrowth = 0.02;
+            damageGrowth = 0.015;
+            speedGrowth = 0.01;
+
+        }
+
+
+        else if(player.class === "MAGE"){
+
+            hpGrowth = 0.02;
+            damageGrowth = 0.03;
+            speedGrowth = 0.003;
+
+        }
+
+
+        else if(player.class === "PRIEST"){
+
+            hpGrowth = 0.03;
+            damageGrowth = 0;
+            speedGrowth = 0.003;
+            healingGrowth = 0.02;
+
+        }
+
+
+        /* =====================================
+           ❤️ INCREASES HP
+        ===================================== */
+
+        const oldMaxHp =
+            player.maxHp;
+
+
+        player.maxHp =
+            Math.floor(
+                player.maxHp *
+                (1 + hpGrowth)
+            );
+
+
+        const hpGain =
+            player.maxHp -
+            oldMaxHp;
+
+
+        player.hp =
+            Math.min(
+                player.maxHp,
+                player.hp + hpGain
+            );
+
+
+        /* =====================================
+           ⚔️ INCREASES DAMAGE
+        ===================================== */
+
+        if(
+            damageGrowth > 0 &&
+            player.damage[0] > 0
+        ){
+
+            player.damage[0] =
+                Math.floor(
+                    player.damage[0] *
+                    (1 + damageGrowth)
+                );
+
+
+            player.damage[1] =
+                Math.floor(
+                    player.damage[1] *
+                    (1 + damageGrowth)
+                );
+
+        }
+
+
+        /* =====================================
+           ⚡ INCREASES ATTACK SPEED
+           Lower number = faster
+        ===================================== */
+
+        if(speedGrowth > 0){
+
+            player.speed =
+                Math.max(
+                    350,
+                    Math.floor(
+                        player.speed *
+                        (1 - speedGrowth)
+                    )
+                );
+
+        }
+
+
+        /* =====================================
+           ✝️ INCREASES HEALING POWER
+        ===================================== */
+
+        if(healingGrowth > 0){
+
+            if(
+                typeof player.healingPower !== "number"
+            ){
+
+                player.healingPower = 1;
+
+            }
+
+            player.healingPower *=
+                (1 + healingGrowth);
+
+        }
+
+
+        /* =====================================
+           ⭐ LEVEL UP NOTICE
+        ===================================== */
+
+        eventBox.textContent =
+            "⭐ " +
+            player.name +
+            " reached LV." +
+            player.level +
+            "!";
+
+
+        addEvent(
+            "⭐ " +
+            player.name +
+            " → LV." +
+            player.level
+        );
+
+
+        /* =====================================
+           ✨ LEVEL UP EFFECT
+        ===================================== */
+
+        const playerElement =
+            document.getElementById(
+                "player-" + player.id
+            );
+
+
+        if(playerElement){
+
+            const levelUpEffect =
+                document.createElement("div");
+
+
+            levelUpEffect.textContent =
+                "⭐ LVL UP!";
+
+
+            levelUpEffect.style.position =
+                "absolute";
+
+
+            levelUpEffect.style.left =
+                "50%";
+
+
+            levelUpEffect.style.top =
+                "8px";
+
+
+            levelUpEffect.style.transform =
+                "translate(-50%, -50%) scale(.4)";
+
+
+            levelUpEffect.style.color =
+                "#ffd21c";
+
+
+            levelUpEffect.style.fontSize =
+                "12px";
+
+
+            levelUpEffect.style.fontWeight =
+                "900";
+
+
+            levelUpEffect.style.whiteSpace =
+                "nowrap";
+
+
+            levelUpEffect.style.zIndex =
+                "50";
+
+
+            levelUpEffect.style.pointerEvents =
+                "none";
+
+
+            levelUpEffect.style.textShadow =
+                "0 0 5px #fff, 0 0 12px #ffd21c, 0 0 25px #ffd21c";
+
+
+            playerElement.appendChild(
+                levelUpEffect
+            );
+
+
+            playerElement.animate(
+                [
+                    {
+                        filter:
+                            "brightness(1)"
+                    },
+                    {
+                        filter:
+                            "brightness(2)"
+                    },
+                    {
+                        filter:
+                            "brightness(1)"
+                    }
+                ],
+                {
+                    duration:700,
+                    easing:"ease-out"
+                }
+            );
+
+
+            levelUpEffect.animate(
+                [
+                    {
+                        transform:
+                            "translate(-50%, -50%) scale(.4)",
+                        opacity:0
+                    },
+                    {
+                        transform:
+                            "translate(-50%, -70%) scale(1.3)",
+                        opacity:1
+                    },
+                    {
+                        transform:
+                            "translate(-50%, -110%) scale(.9)",
+                        opacity:0
+                    }
+                ],
+                {
+                    duration:1200,
+                    easing:"ease-out"
+                }
+            );
+
+
+            setTimeout(() => {
+
+                levelUpEffect.remove();
+
+            },1200);
+
+        }
+
+    }
+
+}
+
+
+/* ============================================================
+   PLAYER ATTACK
+============================================================ */
+
+function launchProjectile(player){
+
+    const element =
+        document.getElementById(
+            "player-" + player.id
+        );
+
+    if(!element) return;
+
+
+    const playerRect =
+        element.getBoundingClientRect();
+
+    const bossRect =
+        bossElement.getBoundingClientRect();
+
+
+    const projectile =
+        document.createElement("div");
+
+    projectile.className =
+        "projectile";
+
+
+    /*
+       Select the projectile image
+       based on the player's class.
+    */
+
+    let imageFile = "";
+
+    if(player.class === "ARCHER"){
+
+        imageFile = "arrow.png";
+
+        projectile.classList.add(
+            "arrow"
+        );
+
+    }
+
+    else if(player.class === "MAGE"){
+
+        imageFile = "fireball.png";
+
+    }
+
+    else if(player.class === "WARRIOR"){
+
+        imageFile = "axe.png";
+
+    }
+
+    else if(player.class === "TANK"){
+
+        imageFile = "shield.png";
+
+    }
+
+    else{
+
+        return;
+
+    }
+
+
+    /*
+       Create the projectile image.
+    */
+
+    const image =
+        document.createElement("img");
+
+    image.src =
+        imageFile;
+
+    image.style.width =
+        "55px";
+
+    image.style.height =
+        "55px";
+
+    image.style.objectFit =
+        "contain";
+
+    image.style.pointerEvents =
+        "none";
+
+
+    projectile.appendChild(
+        image
+    );
+
+
+    /*
+       Start the projectile at the player.
+    */
+
+    projectile.style.left =
+    (
+        playerRect.left +
+        playerRect.width / 2 -
+        27.5
+    ) + "px";
+
+projectile.style.top =
+    (
+        playerRect.top +
+        playerRect.height / 2 -
+        27.5
+    ) + "px";
+
+
+document.body.appendChild(
+    projectile
+);
+
+
+    /*
+       Move the projectile toward the Boss.
+    */
+
+requestAnimationFrame(() => {
+
+    projectile.style.left =
+        (
+            bossRect.left +
+            bossRect.width / 2 -
+            27.5
+        ) + "px";
+
+    projectile.style.top =
+        (
+            bossRect.top +
+            bossRect.height / 2 -
+            27.5
+        ) + "px";
+
+});
+
+
+    /*
+       Remove the projectile
+       after the animation.
+    */
+
+    setTimeout(() => {
+
+        projectile.remove();
+
+    }, 500);
+
+}
+function playerAttack(player){
+
+    /* =====================================
+       ⚔️ LOCAL PLAYER
+    ===================================== */
+
+    if(!player){
+
+        return;
+
+    }
+
+
+    if(!player.alive){
+
+        return;
+
+    }
+
+
+    if(battlePaused){
+
+        return;
+
+    }
+
+
+    if(
+        multiplayerSocket.readyState !==
+        WebSocket.OPEN
+    ){
+
+        return;
+
+    }
+
+
+    /* =====================================
+       🌐 SEND ATTACK REQUEST TO SERVER
+    ===================================== */
+
+    multiplayerSocket.send(
+
+        JSON.stringify({
+
+            type:"attack"
+
+        })
+
+    );
+
+
+    console.log(
+
+        "⚔️ ATTACK REQUEST SENT:",
+        player.name
+
+    );
+
+
+    /* =====================================
+       ⚔️ LOCAL ATTACK ANIMATION
+    ===================================== */
+
+    const currentPlayerElement =
+        document.getElementById(
+            "player-" + player.id
+        );
+
+
+    if(currentPlayerElement){
+
+        currentPlayerElement.classList.add(
+            "attacking"
+        );
+
+
+        setTimeout(() => {
+
+            currentPlayerElement.classList.remove(
+                "attacking"
+            );
+
+        },350);
+
+    }
+
+}
+
+
+/* ============================================================
+   HEALER ACTION
+============================================================ */
+
+function healerAction(healer){
+
+    if(!healer.alive){
+        return;
+    }
+
+    /*
+       A cura é decidida pelo Worker, para que
+       todas as abas recebam o mesmo resultado.
+    */
+
+    if(
+        multiplayerSocket.readyState !==
+        WebSocket.OPEN
+    ){
+        return;
+    }
+
+    multiplayerSocket.send(
+        JSON.stringify({
+            type:"heal"
+        })
+    );
+
+    return;
+
+    const damaged =
+        players.filter(
+            p =>
+                p.alive &&
+                p.hp < p.maxHp
+        );
+
+    if(damaged.length === 0){
+        return;
+    }
+
+    const target =
+        damaged[
+            Math.floor(
+                Math.random() *
+                damaged.length
+            )
+        ];
+
+    /*
+       Base healing.
+       Starts small and grows very slowly
+       with the Priest's level.
+    */
+
+    let heal =
+        Math.floor(
+            Math.random() * 16
+        ) + 15;
+
+    heal +=
+        healer.level * 2;
+
+    /*
+       Healing power gained from level ups.
+       Default value is 1 for existing players.
+    */
+
+    const healingPower =
+        typeof healer.healingPower === "number"
+            ? healer.healingPower
+            : 1;
+
+    heal =
+        Math.floor(
+            heal * healingPower
+        );
+
+    heal =
+        Math.min(
+            heal,
+            target.maxHp - target.hp
+        );
+
+    if(heal <= 0){
+        return;
+    }
+
+    target.hp +=
+        heal;
+
+    healer.healing +=
+        heal;
+
+    /* =====================================
+       💚 HEALING EFFECT
+    ===================================== */
+
+    const targetElement =
+        document.getElementById(
+            "player-" + target.id
+        );
+
+    if(targetElement){
+
+        const rect =
+            targetElement.getBoundingClientRect();
+
+        const healText =
+            document.createElement("div");
+
+        healText.textContent =
+            "+" +
+            heal +
+            " HP";
+
+        healText.style.position =
+            "fixed";
+
+        healText.style.left =
+            (
+                rect.left +
+                rect.width / 2
+            ) + "px";
+
+        healText.style.top =
+            (
+                rect.top +
+                rect.height / 2
+            ) + "px";
+
+        healText.style.transform =
+            "translate(-50%, -50%)";
+
+        healText.style.color =
+            "#39ff88";
+
+        healText.style.fontSize =
+            "22px";
+
+        healText.style.fontWeight =
+            "900";
+
+        healText.style.zIndex =
+            "10005";
+
+        healText.style.pointerEvents =
+            "none";
+
+        healText.style.textShadow =
+            "0 0 5px white, 0 0 12px #00ff66";
+
+        healText.style.transition =
+            "top .8s ease-out, opacity .8s ease-out";
+
+        document.body.appendChild(
+            healText
+        );
+
+        requestAnimationFrame(() => {
+
+            healText.style.top =
+                (
+                    rect.top -
+                    10
+                ) + "px";
+
+            healText.style.opacity =
+                "0";
+
+        });
+
+        setTimeout(() => {
+
+            healText.remove();
+
+        },800);
+
+    }
+
+    eventBox.textContent =
+        "💚 " +
+        healer.name +
+        " HEALED " +
+        target.name +
+        " FOR +" +
+        heal +
+        " HP";
+
+    gainXp(
+        healer,
+        Math.floor(
+            heal * 0.5
+        )
+    );
+
+    update();
+
+    /* =====================================
+       ✝️ PRIEST HEALING ANIMATION
+    ===================================== */
+
+    const healerElement =
+        document.getElementById(
+            "player-" + healer.id
+        );
+
+    if(healerElement){
+
+        healerElement.classList.remove(
+            "healerCast"
+        );
+
+        void healerElement.offsetWidth;
+
+        healerElement.classList.add(
+            "healerCast"
+        );
+
+        setTimeout(() => {
+
+            healerElement.classList.remove(
+                "healerCast"
+            );
+
+        },600);
+
+    }
+
+}
+
+
+/* ============================================================
+   DEATH
+============================================================ */
+
+function killPlayer(player){
+
+    if(!player.alive){
+
+        return;
+
+    }
+
+
+    player.alive = false;
+
+    player.hp = 0;
+
+
+    /* =====================================
+       💀 DEATH SOUND BY CLASS
+    ===================================== */
+
+    let deathSound = null;
+
+
+    if(player.class === "TANK"){
+
+        deathSound = "tankmorto.mp3";
+
+    }
+    else if(player.class === "WARRIOR"){
+
+        deathSound = "guerreiromorto.mp3";
+
+    }
+    else if(player.class === "ARCHER"){
+
+        deathSound = "archermorto.mp3";
+
+    }
+    else if(player.class === "MAGE"){
+
+        deathSound = "magomorto.mp3";
+
+    }
+    else if(player.class === "PRIEST"){
+
+        deathSound = "healermorto.mp3";
+
+    }
+
+
+    if(deathSound){
+
+        const sound =
+            new Audio(deathSound);
+
+        sound.volume = 0.9;
+
+        sound.play()
+            .catch(()=>{});
+
+    }
+
+
+    updatePlayerUI(player);
+
+
+    /* =====================================
+       💀 CHECK GAME OVER
+    ===================================== */
+
+    const alivePlayers =
+        players.filter(
+            player => player.alive
+        );
+
+
+    if(alivePlayers.length === 0){
+
+        bossEnding = true;
+
+        battlePaused = true;
+
+
+        /* =====================================
+           🏆 HIDE VICTORY TROPHY
+        ===================================== */
+
+        const trophyElement =
+            victory.querySelector(
+                ".victoryTrophy"
+            );
+
+
+        if(trophyElement){
+
+            trophyElement.style.display =
+                "none";
+
+        }
+
+
+/* =====================================
+   💀 GAME OVER SOUND — 3X
+===================================== */
+
+const gameOverSound1 =
+    new Audio("gameover.mp3");
+
+const gameOverSound2 =
+    new Audio("gameover.mp3");
+
+const gameOverSound3 =
+    new Audio("gameover.mp3");
+
+
+gameOverSound1.volume = 1.0;
+gameOverSound2.volume = 1.0;
+gameOverSound3.volume = 1.0;
+
+
+gameOverSound1.play()
+    .catch(()=>{});
+
+gameOverSound2.play()
+    .catch(()=>{});
+
+gameOverSound3.play()
+    .catch(()=>{});
+
+
+/* =====================================
+   😈 GAME OVER LAUGH
+   Plays 2 seconds after Game Over
+===================================== */
+
+setTimeout(() => {
+
+    const gameOverLaugh =
+        new Audio("gameoverlaugh.mp3");
+
+    gameOverLaugh.volume = 1.0;
+
+    gameOverLaugh.play()
+        .catch(()=>{});
+
+},2000);
+
+
+        /* =====================================
+           ☠️ GAME OVER SCREEN
+        ===================================== */
+
+        const titleElement =
+            victory.querySelector(
+                ".victoryTitle"
+            );
+
+
+        if(titleElement){
+
+            titleElement.textContent =
+                "GAME OVER";
+
+        }
+
+
+        victoryBoss.textContent =
+            "💀";
+
+
+        victoryText.textContent =
+            "NEW BATTLE IN 10";
+
+
+        victory.classList.add(
+            "gameOver"
+        );
+
+
+        victory.classList.add(
+            "active"
+        );
+
+
+        flash.classList.add(
+            "active"
+        );
+
+
+        eventBox.textContent =
+            "💀 THE BOSS WON! NEW BATTLE IN 10 SECONDS!";
+
+
+        addEvent(
+            "💀 GAME OVER!"
+        );
+
+
+        /* =====================================
+           ⏱️ COUNTDOWN FOR NEW BATTLE
+        ===================================== */
+
+        let countdown = 10;
+
+
+        const restartInterval =
+            setInterval(()=>{
+
+                countdown--;
+
+
+                if(countdown > 0){
+
+                    victoryText.textContent =
+                        "NEW BATTLE IN " +
+                        countdown;
+
+                }
+                else{
+
+                    clearInterval(
+                        restartInterval
+                    );
+
+
+                    /* =========================
+                       🔄 RESTART BATTLE
+                       CLEAR ALL PLAYERS
+                    ========================= */
+
+                    bossEnding = false;
                     battlePaused = true;
 
-                    battlePaused = false;
                     /* =====================================
                        🌐 RESET OFICIAL PELO SERVIDOR
                     ===================================== */
@@ -110,71 +5927,2940 @@ bossEnding = false;
                     }
 
 
-/* =====================================
-@@ -8567,26 +8601,15 @@
+                    /* =====================================
+                       🏆 SHOW VICTORY TROPHY AGAIN
+                    ===================================== */
 
-      Cada navegador representa
-      apenas 1 jogador.
+                    const trophyElement =
+                        victory.querySelector(
+                            ".victoryTrophy"
+                        );
 
-       A IA também fica dentro de
-       "players", portanto não podemos
-       usar players.length para saber
-       se o jogador local já existe.
-   */
 
-    const localPlayerExists =
+                    if(trophyElement){
+
+                        trophyElement.style.display =
+                            "";
+
+                    }
+
+
+                    victory.classList.remove(
+                        "active"
+                    );
+
+
+                    victory.classList.remove(
+                        "gameOver"
+                    );
+
+
+                    flash.classList.remove(
+                        "active"
+                    );
+
+
+                    eventBox.textContent =
+                        "🔥 NEW BATTLE HAS STARTED!";
+
+
+                    addEvent(
+                        "🔥 NEW BATTLE — BOSS LEVEL 1"
+                    );
+
+
+                    update();
+
+                }
+
+            },1000);
+
+
+        return;
+
+    }
+
+}
+
+
+/* ============================================================
+   REQUEST REVIVAL
+============================================================ */
+
+function askForRevive(player){
+
+    if(player.alive){
+
+        return;
+
+    }
+
+
+    const healerAlive =
         players.some(
-            player =>
-                !player.isAI
+            p =>
+                p.alive &&
+                p.class === "HEALER"
         );
 
 
-    if(localPlayerExists){
-    if(players.length >= 1){
-return;
+    if(!healerAlive){
+
+        return;
+
+    }
+
+
+    const playerElement =
+        document.getElementById(
+            "player-" + player.id
+        );
+
+
+    if(!playerElement){
+
+        return;
+
+    }
+
+
+    const oldRequest =
+        playerElement.querySelector(
+            ".reviveRequest"
+        );
+
+
+    if(oldRequest){
+
+        oldRequest.remove();
+
+    }
+
+
+    const reviveRequest =
+        document.createElement("div");
+
+
+    reviveRequest.className =
+        "reviveRequest";
+
+
+    reviveRequest.textContent =
+        "💬 AJUDA, " +
+        player.name +
+        "! 😭";
+
+
+    /*
+       The message stays inside the
+       player card.
+    */
+
+    reviveRequest.style.position =
+        "absolute";
+
+
+    reviveRequest.style.left =
+        "50%";
+
+
+    reviveRequest.style.bottom =
+        "2px";
+
+
+    reviveRequest.style.transform =
+        "translateX(-50%)";
+
+
+    reviveRequest.style.width =
+        "100%";
+
+
+    reviveRequest.style.textAlign =
+        "center";
+
+
+    reviveRequest.style.zIndex =
+        "5";
+
+
+    playerElement.appendChild(
+        reviveRequest
+    );
+
+
+    setTimeout(()=>{
+
+        reviveRequest.remove();
+
+    },3000);
+
 }
 
 
-createPlayer();
-
-}
-
-
-@@ -8835,38 +8858,13 @@
-  INITIALIZATION
+/* ============================================================
+   RESSUSCITAR
 ============================================================ */
 
-if(LOCAL_TEST_MODE){
-    startPlayerEntries();
+function revive(healer){
+
+    if(!healer.alive){
+
+        return;
+
+    }
+
+
+    const deadPlayers =
+        players.filter(
+            p => !p.alive
+        );
+
+
+    if(deadPlayers.length === 0){
+
+        return;
+
+    }
+
+
+    /*
+       45% chance.
+    */
+
+    if(Math.random() > 0.45){
+
+        return;
+
+    }
+
+
+    const target =
+        deadPlayers[
+            Math.floor(
+                Math.random() * deadPlayers.length
+            )
+        ];
+
+
+    target.alive = true;
+
+    target.hp =
+        Math.floor(
+            target.maxHp * 0.5
+        );
+
+
+    eventBox.textContent =
+        "✝️ " +
+        healer.name +
+        " REVIVED " +
+        target.name +
+        "!";
+
+
+    addEvent(
+        "✝️ " +
+        healer.name +
+        " REVIVED " +
+        target.name
+    );
+
+
+    update();
+
+
+    /* =====================================
+       ✝️ REVIVAL AURA
+    ===================================== */
+
+    const targetElement =
+        document.getElementById(
+            "player-" + target.id
+        );
+
+
+    if(targetElement){
+
+        const aura =
+            document.createElement("div");
+
+
+        aura.style.position =
+            "absolute";
+
+        aura.style.left =
+            "50%";
+
+        aura.style.top =
+            "50%";
+
+        aura.style.width =
+            "100%";
+
+        aura.style.height =
+            "100%";
+
+        aura.style.transform =
+            "translate(-50%, -50%)";
+
+        aura.style.borderRadius =
+            "50%";
+
+        aura.style.pointerEvents =
+            "none";
+
+        aura.style.zIndex =
+            "0";
+
+        aura.style.boxShadow =
+            "0 0 12px white, 0 0 25px white, 0 0 45px #ffffff";
+
+        aura.style.background =
+            "radial-gradient(circle, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.12) 45%, rgba(255,255,255,0) 75%)";
+
+
+        targetElement.style.position =
+            "relative";
+
+
+        targetElement.appendChild(
+            aura
+        );
+
+
+        /*
+           Pulsing revival effect.
+        */
+
+        aura.animate(
+            [
+                {
+                    transform:
+                        "translate(-50%, -50%) scale(0.7)",
+                    opacity: 0
+                },
+                {
+                    transform:
+                        "translate(-50%, -50%) scale(1.15)",
+                    opacity: 1
+                },
+                {
+                    transform:
+                        "translate(-50%, -50%) scale(1.35)",
+                    opacity: 0
+                }
+            ],
+            {
+                duration: 1800,
+                easing: "ease-out"
+            }
+        );
+
+
+        setTimeout(() => {
+
+            aura.remove();
+
+        }, 1800);
+
+    }
+
+}
+
+
+/* ============================================================
+   BOSS DAMAGE
+============================================================ */
+
+const bossSpells = [
+
+    ["🔥","FIREBALL",35],
+
+    ["⚡","DARK LIGHTNING",45],
+
+    ["💜","SHADOW BLAST",55]
+
+];
+/* =========================================
+   PLAYER SPECIAL ABILITIES
+========================================= */
+
+function skillMessage(text){
+
+    eventBox.textContent =
+        text;
+
+    addEvent(
+        text
+    );
+
+}
+
+/* =========================================
+   📢 SKILL ANNOUNCEMENT ON SCREEN
+========================================= */
+
+function showSkillAnnouncement(player, skillText){
+
+    const announcement =
+        document.createElement("div");
+
+
+    announcement.className =
+        "skillAnnouncement";
+
+
+    announcement.innerHTML =
+        "⚡ " +
+        player.name +
+        " USED " +
+        skillText +
+        "!";
+
+
+    document.body.appendChild(
+        announcement
+    );
+
+
+    setTimeout(()=>{
+
+        announcement.remove();
+
+    },1800);
+
+}
+/* =========================================
+   🛡️ TAUNT - TANK
+========================================= */
+
+function tankTaunt(player){
+
+    if(!player.alive) return;
+
+    if(player.taunt) return;
+
+
+    /* =====================================
+       🛡️ ATIVA TAUNT
+    ===================================== */
+
+    player.taunt = true;
+
+
+    /* =====================================
+       ⏱️ FINALIZA O TAUNT
+       THE TIMER IS SET FIRST TO
+       MAKE SURE IT ALWAYS RUNS
+    ===================================== */
+
+    setTimeout(()=>{
+
+        player.taunt = false;
+
+
+        /* ================================
+           REMOVE GLOW
+        ================================= */
+
+        const currentElement =
+            document.getElementById(
+                "player-" + player.id
+            );
+
+
+        if(currentElement){
+
+            currentElement.classList.remove(
+                "tauntAura"
+            );
+
+
+            /* ================================
+               REMOVE SHIELD
+            ================================= */
+
+            const shield =
+                currentElement.querySelector(
+                    ".tauntShield"
+                );
+
+
+            if(shield){
+
+                shield.remove();
+
+            }
+
+        }
+
+
+        /* ================================
+           EXTRA SAFETY
+           REMOVE ANY SHIELD FROM THIS TANK
+        ================================= */
+
+        document
+            .querySelectorAll(
+                "#player-" + player.id + " .tauntShield"
+            )
+            .forEach(shield => {
+
+                shield.remove();
+
+            });
+
+
+        /* ================================
+           EXTRA SAFETY
+           REMOVE AURA FROM THIS TANK
+        ================================= */
+
+        const finalElement =
+            document.getElementById(
+                "player-" + player.id
+            );
+
+
+        if(finalElement){
+
+            finalElement.classList.remove(
+                "tauntAura"
+            );
+
+        }
+
+    },5000);
+
+
+    /* =====================================
+       🛡️ TAUNT SOUND
+    ===================================== */
+
+    const tauntSound =
+        new Audio("taunt.mp3");
+
+    tauntSound.volume =
+        0.8;
+
+    tauntSound.play()
+        .catch(()=>{});
+
+
+    /* =====================================
+       🛡️ TANK CARD
+    ===================================== */
+
+    const element =
+        document.getElementById(
+            "player-" + player.id
+        );
+
+
+    if(element){
+
+        element.classList.add(
+            "tauntAura"
+        );
+
+
+        /* =================================
+           🛡️ ESCUDO
+        ================================= */
+
+        const oldShield =
+            element.querySelector(
+                ".tauntShield"
+            );
+
+
+        if(oldShield){
+
+            oldShield.remove();
+
+        }
+
+
+        const shield =
+            document.createElement("div");
+
+
+        shield.className =
+            "tauntShield";
+
+
+        shield.textContent =
+            "🛡️";
+
+
+        element.appendChild(
+            shield
+        );
+
+    }
+
+
+    /* =====================================
+       📢 SKILL NOTICE
+    ===================================== */
+
+    showSkillAnnouncement(
+        player,
+        "TAUNT"
+    );
+
+
+    skillMessage(
+        "🛡️🔥 " +
+        player.name +
+        " ACTIVATED TAUNT! " +
+        "THE BOSS HAS BEEN TAUNTED!"
+    );
+
+}
+/* =========================================
+   ⚔️ HEAVY STRIKE - WARRIOR
+========================================= */
+
+/* =========================================
+   ⚔️ HEAVY STRIKE - WARRIOR
+========================================= */
+
+function warriorSkill(player){
+
+    if(!player.alive) return;
+
+    if(bossHp <= 0) return;
+
+
+    /* =====================================
+       ⚔️ HEAVY STRIKE SOUND
+    ===================================== */
+
+    const warriorSound =
+        new Audio("golpepesado.wav");
+
+    warriorSound.volume =
+        0.9;
+
+    warriorSound.play()
+        .catch(()=>{});
+
+
+    /* =====================================
+       ⚔️ HEAVY STRIKE
+    ===================================== */
+
+    const damage =
+        Math.floor(
+            (
+                Math.random()*50 + 100
+            )
+            *
+            (
+                1 +
+                player.level*.08
+            )
+            *
+            5
+        );
+
+
+    bossHp -=
+        Math.min(
+            damage,
+            bossHp
+        );
+
+
+    player.totalDamage +=
+        damage;
+
+
+    gainXp(
+        player,
+        Math.floor(damage*.45)
+    );
+
+
+    /* =====================================
+       ⚔️ WARRIOR CHARGE
+    ===================================== */
+
+    const playerElement =
+        document.getElementById(
+            "player-" + player.id
+        );
+
+
+    if(playerElement){
+
+        playerElement.classList.add(
+            "tankAttack"
+        );
+
+
+        setTimeout(()=>{
+
+            playerElement.classList.remove(
+                "tankAttack"
+            );
+
+        },400);
+
+    }
+
+
+    /* =====================================
+       ⚔️ SWORD FLYING TO THE BOSS
+    ===================================== */
+
+    launchProjectile(player);
+
+
+    /* =====================================
+       💥 IMPACT ON THE BOSS
+    ===================================== */
+
+    setTimeout(()=>{
+
+        const bossRect =
+            bossElement.getBoundingClientRect();
+
+
+        /* =================================
+           ⚔️💥 STRIKE ANIMATION
+        ================================= */
+
+        const impact =
+            document.createElement("div");
+
+
+        impact.className =
+            "skillImpact";
+
+
+        impact.textContent =
+            "⚔️💥";
+
+
+        impact.style.left =
+            (
+                bossRect.left +
+                bossRect.width / 2 -
+                30
+            ) + "px";
+
+
+        impact.style.top =
+            (
+                bossRect.top +
+                bossRect.height / 2 -
+                30
+            ) + "px";
+
+
+        impact.style.zIndex =
+            "10010";
+
+
+        impact.style.pointerEvents =
+            "none";
+
+
+        document.body.appendChild(
+            impact
+        );
+
+
+        /* =================================
+           💥 BOSS IMPACT EFFECT
+        ================================= */
+
+        bossElement.classList.add(
+            "hit"
+        );
+
+
+        setTimeout(()=>{
+
+            bossElement.classList.remove(
+                "hit"
+            );
+
+        },500);
+
+
+        /* =================================
+           🔴 SKILL DAMAGE
+           APPEARS SHORTLY AFTER THE IMPACT
+        ================================= */
+
+        setTimeout(()=>{
+
+            const currentBossRect =
+                bossElement.getBoundingClientRect();
+
+
+            const damageText =
+                document.createElement("div");
+
+
+            damageText.className =
+                "bossDamageNumber";
+
+
+            damageText.textContent =
+                "-" +
+                damage.toLocaleString("en-US");
+
+
+            damageText.style.position =
+                "fixed";
+
+
+            damageText.style.left =
+                (
+                    currentBossRect.left +
+                    currentBossRect.width / 2
+                ) + "px";
+
+
+            damageText.style.top =
+                (
+                    currentBossRect.top +
+                    currentBossRect.height / 2 -
+                    5
+                ) + "px";
+
+
+            damageText.style.zIndex =
+                "10020";
+
+
+            damageText.style.pointerEvents =
+                "none";
+
+
+            damageText.style.color =
+                "#ff3030";
+
+
+            damageText.style.fontSize =
+                "42px";
+
+
+            damageText.style.fontWeight =
+                "900";
+
+
+            damageText.style.textShadow =
+                "0 0 4px white, 0 0 10px red, 0 0 20px darkred";
+
+
+            damageText.style.animation =
+                "bossDamageAnim 1.5s ease-out forwards";
+
+
+            document.body.appendChild(
+                damageText
+            );
+
+
+            setTimeout(()=>{
+
+                damageText.remove();
+
+            },1500);
+
+        },180);
+
+
+        /* =================================
+           🧹 REMOVE SKILL ANIMATION
+        ================================= */
+
+        setTimeout(()=>{
+
+            impact.remove();
+
+        },800);
+
+    },500);
+
+
+    /* =====================================
+       📢 SKILL NOTICE
+    ===================================== */
+
+    showSkillAnnouncement(
+        player,
+        "HEAVY STRIKE"
+    );
+
+
+    skillMessage(
+        "⚔️💥 " +
+        player.name +
+        " ACTIVATED HEAVY STRIKE! -" +
+        damage.toLocaleString("en-US")
+    );
+
+
+    update();
+
+}
+
+/* =========================================
+   🏹 ARROW RAIN - ARCHER
+========================================= */
+
+function archerSkill(player){
+
+    if(!player.alive) return;
+
+    if(bossHp <= 0) return;
+
+
+    let totalDamage = 0;
+
+
+    /*
+       Load the arrow rain sound once.
+    */
+
+    const arrowSound =
+        new Audio("chuvadeflecha.mp3");
+
+    arrowSound.volume = 0.8;
+
+
+    /*
+       Fire 5 arrows.
+    */
+
+    for(let i = 0; i < 5; i++){
+
+        const damage =
+            Math.floor(
+                (
+                    Math.random() * 35 + 30
+                )
+                *
+                (
+                    1 +
+                    player.level * 0.08
+                )
+            );
+
+
+        const appliedDamage =
+            Math.min(
+                damage,
+                bossHp
+            );
+
+
+        totalDamage +=
+            appliedDamage;
+
+        bossHp -=
+            appliedDamage;
+
+
+        setTimeout(() => {
+
+            launchProjectile(player);
+
+            arrowSound.currentTime = 0;
+
+            arrowSound.play()
+                .catch(() => {});
+
+        }, i * 180);
+
+    }
+
+
+    /*
+       Add the total damage.
+    */
+
+    player.totalDamage +=
+        totalDamage;
+
+
+    /*
+       Give XP based on damage.
+    */
+
+    gainXp(
+        player,
+        Math.floor(
+            totalDamage * 0.45
+        )
+    );
+
+
+    /*
+       Show total damage on the Boss.
+    */
+
+    setTimeout(() => {
+
+        const bossRect =
+            bossElement.getBoundingClientRect();
+
+
+        const damageText =
+            document.createElement("div");
+
+        damageText.className =
+            "bossDamageNumber";
+
+
+        damageText.textContent =
+            "-" +
+            totalDamage.toLocaleString(
+                "en-US"
+            );
+
+
+        damageText.style.position =
+            "fixed";
+
+        damageText.style.left =
+            (
+                bossRect.left +
+                bossRect.width / 2
+            ) + "px";
+
+        damageText.style.top =
+            (
+                bossRect.top +
+                bossRect.height / 2 -
+                5
+            ) + "px";
+
+
+        damageText.style.zIndex =
+            "10020";
+
+        damageText.style.pointerEvents =
+            "none";
+
+        damageText.style.color =
+            "#ff3030";
+
+        damageText.style.fontSize =
+            "42px";
+
+        damageText.style.fontWeight =
+            "900";
+
+        damageText.style.textShadow =
+            "0 0 4px white, 0 0 10px red, 0 0 20px darkred";
+
+        damageText.style.animation =
+            "bossDamageAnim 1.5s ease-out forwards";
+
+
+        document.body.appendChild(
+            damageText
+        );
+
+
+        setTimeout(() => {
+
+            damageText.remove();
+
+        }, 1500);
+
+
+        /*
+           Boss hit effect.
+        */
+
+        bossElement.classList.add(
+            "hit"
+        );
+
+
+        setTimeout(() => {
+
+            bossElement.classList.remove(
+                "hit"
+            );
+
+        }, 500);
+
+    }, 900);
+
+
+    showSkillAnnouncement(
+        player,
+        "ARROW RAIN"
+    );
+
+
+    skillMessage(
+        "🏹 " +
+        player.name +
+        " USED ARROW RAIN! -" +
+        totalDamage.toLocaleString(
+            "en-US"
+        )
+    );
+
+
+    update();
+
+}
+
+
+/* =========================================
+   🧙 METEOR - MAGE
+========================================= */
+
+function mageSkill(player){
+
+    if(!player.alive) return;
+
+    if(bossHp <= 0) return;
+
+
+    /* =====================================
+       ☄️ METEOR SOUND
+    ===================================== */
+
+    const meteorSound =
+        new Audio("meteoro.wav");
+
+    meteorSound.volume =
+        0.8;
+
+    meteorSound.play()
+        .catch(()=>{});
+
+
+    /* =====================================
+       ☄️ DAMAGE
+    ===================================== */
+
+    const damage =
+        Math.floor(
+            (
+                Math.random() * 150 + 200
+            )
+            *
+            (
+                1 +
+                player.level * 0.10
+            )
+            *
+            3
+        );
+
+
+    const appliedDamage =
+        Math.min(
+            damage,
+            bossHp
+        );
+
+
+    bossHp -=
+        appliedDamage;
+
+
+    player.totalDamage +=
+        appliedDamage;
+
+
+    gainXp(
+        player,
+        Math.floor(
+            appliedDamage * 0.45
+        )
+    );
+
+
+    /* =====================================
+       ☄️ METEOR
+    ===================================== */
+
+    const bossRect =
+        bossElement.getBoundingClientRect();
+
+
+    const meteor =
+        document.createElement("div");
+
+
+    meteor.className =
+        "meteorEffect";
+
+
+    meteor.textContent =
+        "☄️";
+
+
+    meteor.style.left =
+        (
+            bossRect.left +
+            bossRect.width / 2 -
+            30
+        ) + "px";
+
+
+    meteor.style.top =
+        (
+            bossRect.top -
+            220
+        ) + "px";
+
+
+    document.body.appendChild(
+        meteor
+    );
+
+
+    requestAnimationFrame(() => {
+
+        meteor.style.top =
+            (
+                bossRect.top +
+                bossRect.height / 2 -
+                30
+            ) + "px";
+
+    });
+
+
+    /* =====================================
+       💥 IMPACT EXPLOSION
+    ===================================== */
+
+    setTimeout(() => {
+
+        meteor.remove();
+
+
+        const explosion =
+            document.createElement("div");
+
+
+        explosion.className =
+            "skillImpact";
+
+
+        explosion.textContent =
+            "💥🔥";
+
+
+        explosion.style.left =
+            (
+                bossRect.left +
+                bossRect.width / 2 -
+                25
+            ) + "px";
+
+
+        explosion.style.top =
+            (
+                bossRect.top +
+                bossRect.height / 2 -
+                25
+            ) + "px";
+
+
+        document.body.appendChild(
+            explosion
+        );
+
+
+        /*
+           Show damage on the Boss.
+        */
+
+        const damageText =
+            document.createElement("div");
+
+
+        damageText.className =
+            "bossDamageNumber";
+
+
+        damageText.textContent =
+            "-" +
+            appliedDamage.toLocaleString(
+                "en-US"
+            );
+
+
+        damageText.style.position =
+            "fixed";
+
+
+        damageText.style.left =
+            (
+                bossRect.left +
+                bossRect.width / 2
+            ) + "px";
+
+
+        damageText.style.top =
+            (
+                bossRect.top +
+                bossRect.height / 2 -
+                5
+            ) + "px";
+
+
+        damageText.style.zIndex =
+            "10020";
+
+
+        damageText.style.pointerEvents =
+            "none";
+
+
+        damageText.style.color =
+            "#ff3030";
+
+
+        damageText.style.fontSize =
+            "42px";
+
+
+        damageText.style.fontWeight =
+            "900";
+
+
+        damageText.style.textShadow =
+            "0 0 4px white, 0 0 10px red, 0 0 20px darkred";
+
+
+        damageText.style.animation =
+            "bossDamageAnim 1.5s ease-out forwards";
+
+
+        document.body.appendChild(
+            damageText
+        );
+
+
+        setTimeout(() => {
+
+            damageText.remove();
+
+        }, 1500);
+
+
+        /*
+           Boss hit effect.
+        */
+
+        bossElement.classList.add(
+            "hit"
+        );
+
+
+        setTimeout(() => {
+
+            bossElement.classList.remove(
+                "hit"
+            );
+
+        }, 500);
+
+
+        setTimeout(() => {
+
+            explosion.remove();
+
+        }, 500);
+
+    }, 700);
+
+
+    showSkillAnnouncement(
+        player,
+        "METEOR"
+    );
+
+
+    skillMessage(
+        "🧙 " +
+        player.name +
+        " USED METEOR! -" +
+        appliedDamage.toLocaleString(
+            "en-US"
+        )
+    );
+
+
+    update();
+
+}
+
+/* =========================================
+   🥷 EXECUTION - ASSASSIN
+========================================= */
+
+function assassinSkill(player){
+
+    if(!player.alive) return;
+
+    if(bossHp <= 0) return;
+
+
+    /* =====================================
+       🥷 EXECUTION SOUND
+    ===================================== */
+
+    const executionSound =
+        new Audio("execucao.mp3");
+
+    executionSound.volume =
+        0.9;
+
+    executionSound.play()
+        .catch(()=>{});
+
+
+    /* =====================================
+       🥷 EXECUTION
+       10% OF THE BOSS MAX HP
+    ===================================== */
+
+    let damage =
+        Math.floor(
+            maxBossHp * 0.10
+        );
+
+
+    damage =
+        Math.min(
+            damage,
+            bossHp
+        );
+
+
+    bossHp -=
+        damage;
+
+
+    player.totalDamage +=
+        damage;
+
+
+    gainXp(
+        player,
+        Math.floor(damage*.45)
+    );
+
+
+    /* =====================================
+       💨 ATTACK
+    ===================================== */
+
+    launchProjectile(player);
+
+
+    /* =====================================
+       💀 SLASH THE BOSS
+    ===================================== */
+
+    setTimeout(()=>{
+
+        const bossRect =
+            bossElement.getBoundingClientRect();
+
+
+        const slash =
+            document.createElement("div");
+
+
+        slash.className =
+            "skillImpact";
+
+
+        slash.textContent =
+            "✴️";
+
+
+        slash.style.left =
+            (
+                bossRect.left +
+                bossRect.width / 2 -
+                35
+            ) + "px";
+
+
+        slash.style.top =
+            (
+                bossRect.top +
+                bossRect.height / 2 -
+                35
+            ) + "px";
+
+
+        slash.style.fontSize =
+            "85px";
+
+
+        document.body.appendChild(
+            slash
+        );
+
+
+        bossElement.classList.add(
+            "executionEffect"
+        );
+
+
+        setTimeout(()=>{
+
+            slash.remove();
+
+            bossElement.classList.remove(
+                "executionEffect"
+            );
+
+        },700);
+
+
+    },450);
+
+
+    showSkillAnnouncement(
+        player,
+        "EXECUTION"
+    );
+
+
+    skillMessage(
+        "🥷 " +
+        player.name +
+        " USED EXECUTION! -" +
+        damage.toLocaleString("en-US")
+    );
+
+
+    update();
+
+}
+
+/* =========================================
+   ✝️ RESURRECTION - HEALER
+========================================= */
+
+function healerSkill(player){
+
+    if(!player.alive) return;
+
+
+    /* =====================================
+       ✝️ FIND DEAD PLAYERS
+    ===================================== */
+
+    const deadPlayers =
+        players.filter(
+            p => !p.alive
+        );
+
+
+    /*
+       Do nothing if nobody is dead.
+    */
+
+    if(deadPlayers.length === 0){
+
+        return;
+
+    }
+
+
+    /* =====================================
+       ✝️ RESURRECTION SOUND
+    ===================================== */
+
+    const resurrectionSound =
+        new Audio("ressurrection.mp3");
+
+    resurrectionSound.volume =
+        0.9;
+
+    resurrectionSound.play()
+        .catch(()=>{});
+
+
+    /* =====================================
+       ✝️ SKILL ANNOUNCEMENT
+    ===================================== */
+
+    showSkillAnnouncement(
+        player,
+        "RESURRECTION"
+    );
+
+
+    /*
+       Select a random dead player.
+    */
+
+    const target =
+        deadPlayers[
+            Math.floor(
+                Math.random() *
+                deadPlayers.length
+            )
+        ];
+
+
+    /*
+       Revive with 50% HP.
+    */
+
+    target.alive = true;
+
+    target.hp =
+        Math.floor(
+            target.maxHp * 0.5
+        );
+
+
+    /*
+       ✝️ Count the resurrected HP
+       as healing for the Priest.
+    */
+
+    player.healing += target.hp;
+
+
+    /*
+       Update the player card.
+    */
+
+    update();
+
+
+    /*
+       Show the resurrection message.
+    */
+
+    skillMessage(
+        "✝️ " +
+        player.name +
+        " REVIVED " +
+        target.name +
+        "!"
+    );
+
+
+    eventBox.textContent =
+        "✝️ " +
+        player.name +
+        " REVIVED " +
+        target.name +
+        "!";
+
+
+    /* =====================================
+       ✨ REVIVAL AURA
+    ===================================== */
+
+    const targetElement =
+        document.getElementById(
+            "player-" + target.id
+        );
+
+
+    if(targetElement){
+
+        const aura =
+            document.createElement("div");
+
+
+        aura.style.position =
+            "absolute";
+
+        aura.style.left =
+            "50%";
+
+        aura.style.top =
+            "50%";
+
+        aura.style.width =
+            "100%";
+
+        aura.style.height =
+            "100%";
+
+        aura.style.transform =
+            "translate(-50%, -50%)";
+
+        aura.style.borderRadius =
+            "50%";
+
+        aura.style.pointerEvents =
+            "none";
+
+        aura.style.zIndex =
+            "5";
+
+        aura.style.boxShadow =
+            "0 0 12px white, 0 0 25px white, 0 0 45px white";
+
+        aura.style.background =
+            "radial-gradient(circle, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.12) 45%, rgba(255,255,255,0) 75%)";
+
+
+        targetElement.style.position =
+            "relative";
+
+
+        targetElement.appendChild(
+            aura
+        );
+
+
+        aura.animate(
+            [
+                {
+                    transform:
+                        "translate(-50%, -50%) scale(0.6)",
+                    opacity: 0
+                },
+                {
+                    transform:
+                        "translate(-50%, -50%) scale(1.1)",
+                    opacity: 1
+                },
+                {
+                    transform:
+                        "translate(-50%, -50%) scale(1.4)",
+                    opacity: 0
+                }
+            ],
+            {
+                duration: 1800,
+                easing: "ease-out"
+            }
+        );
+
+
+        setTimeout(() => {
+
+            aura.remove();
+
+        }, 1800);
+
+    }
+
+}
+function bossAttack(){
+
+    /*
+       O navegador não calcula mais o ataque.
+       Ele só pede o ataque; o Worker decide
+       o resultado e o envia como bossAttackResult.
+    */
+
+    if(
+        multiplayerSocket.readyState !==
+        WebSocket.OPEN
+    ){
+
+        return;
+
+    }
+
+    if(battlePaused || bossHp <= 0){
+
+        return;
+
+    }
+
+    multiplayerSocket.send(
+        JSON.stringify({
+            type:"bossAttack"
+        })
+    );
+
+    return;
+
+    if(bossHp <= 0){
+        return;
+    }
+
+    if(battlePaused){
+        return;
+    }
+
+    const alivePlayers =
+        players.filter(
+            p => p.alive
+        );
+
+    if(alivePlayers.length === 0){
+        return;
+    }
+
+    /*
+       🛡️ TAUNT
+       If a player is taunting,
+       the Boss must attack them.
+    */
+
+    const tauntPlayers =
+        alivePlayers.filter(
+            p => p.taunt === true
+        );
+
+    let target;
+
+    if(tauntPlayers.length > 0){
+
+        target =
+            tauntPlayers[
+                Math.floor(
+                    Math.random() *
+                    tauntPlayers.length
+                )
+            ];
+
+    }
+    else{
+
+        /*
+           🎯 TARGET CHANCE BY FORMATION
+        */
+
+        const targetWeights = {
+
+            "TANK": 40,
+            "WARRIOR": 25,
+            "ARCHER": 18,
+            "MAGE": 12,
+            "PRIEST": 5
+
+        };
+
+        const weightedPlayers = [];
+
+        alivePlayers.forEach(
+            player => {
+
+                const weight =
+                    targetWeights[player.class] || 1;
+
+                for(let i = 0; i < weight; i++){
+
+                    weightedPlayers.push(
+                        player
+                    );
+
+                }
+
+            }
+        );
+
+        target =
+            weightedPlayers[
+                Math.floor(
+                    Math.random() *
+                    weightedPlayers.length
+                )
+            ];
+
+    }
+
+    /*
+       🎯 BOSS SPELL
+    */
+
+    const spell =
+        bossSpells[
+            Math.floor(
+                Math.random() *
+                bossSpells.length
+            )
+        ];
+
+    /*
+       💥 BASE DAMAGE
+       Damage increases with Boss level.
+    */
+
+    let damage =
+        Math.floor(
+            spell[2] *
+            (
+                1 +
+                bossLevel * 0.10
+            )
+        );
+
+    /*
+       🔥 EXTRA DAMAGE FROM LEVEL 20+
+    */
+
+    if(bossLevel > 20){
+
+        damage =
+            Math.floor(
+                damage *
+                (
+                    1 +
+                    (bossLevel - 20) * 0.05
+                )
+            );
+
+    }
+
+    /*
+       👑 SPECIAL BOSS
+       +50% damage.
+    */
+
+    if(currentBoss.special){
+
+        damage =
+            Math.floor(
+                damage * 1.5
+            );
+
+    }
+
+    /*
+       🔥 RAGE
+       Below 25% HP:
+       +50% damage.
+    */
+
+    if(bossHp <= maxBossHp * 0.25){
+
+        damage =
+            Math.floor(
+                damage * 1.5
+            );
+
+    }
+
+    /*
+       🛡️ TANK DAMAGE REDUCTION
+    */
+
+    if(target.class === "TANK"){
+
+        damage =
+            Math.floor(
+                damage * 0.65
+            );
+
+    }
+
+    damage =
+        Math.min(
+            damage,
+            target.hp
+        );
+
+    target.hp -= damage;
+
+    /*
+       💥 BOSS HIT SOUND
+    */
+
+    const bossHitSound =
+        new Audio("golpeboss.mp3");
+
+    bossHitSound.volume =
+        0.9;
+
+    bossHitSound.play()
+        .catch(()=>{});
+
+    /*
+       💥 DAMAGE ON PLAYER
+    */
+
+    const targetElement =
+        document.getElementById(
+            "player-" + target.id
+        );
+
+    if(targetElement){
+
+        const rect =
+            targetElement.getBoundingClientRect();
+
+        const damageText =
+            document.createElement("div");
+
+        damageText.className =
+            "bossDamageNumber";
+
+        damageText.textContent =
+            "-" +
+            damage;
+
+        damageText.style.left =
+            (
+                rect.left +
+                rect.width / 2
+            ) + "px";
+
+        damageText.style.top =
+            (
+                rect.top +
+                rect.height / 2
+            ) + "px";
+
+        document.body.appendChild(
+            damageText
+        );
+
+        setTimeout(()=>{
+
+            damageText.remove();
+
+        },800);
+
+    }
+
+    eventBox.textContent =
+        spell[0] +
+        " " +
+        spell[1] +
+        "! " +
+        target.name +
+        " lost " +
+        damage +
+        " HP";
+
+    if(target.hp <= 0){
+
+        killPlayer(target);
+
+    }
+
+    update();
+
+}
+
+/* ============================================================
+   RAGE
+============================================================ */
+
+function checkBossRage(){
+
+    const percent =
+        bossHp / maxBossHp;
+
+    if(percent <= 0.25){
+
+        /*
+           Boss enters Rage mode.
+        */
+
+        const wasAlreadyRaging =
+            bossElement.classList.contains("rage");
+
+        bossElement.classList.add(
+            "rage"
+        );
+
+        /*
+           Play Rage sound only once.
+        */
+
+        if(!wasAlreadyRaging){
+
+            const rageSound =
+                new Audio("rage.mp3");
+
+            rageSound.volume =
+                0.9;
+
+            rageSound.play()
+                .catch(()=>{});
+
+            /*
+               Show RAGE above the Boss.
+            */
+
+            const rageText =
+                document.createElement("div");
+
+            rageText.textContent =
+                "RAGE";
+
+            rageText.style.position =
+                "fixed";
+
+            const bossRect =
+                bossElement.getBoundingClientRect();
+
+            rageText.style.left =
+                (
+                    bossRect.left +
+                    bossRect.width / 2
+                ) + "px";
+
+            rageText.style.top =
+                (
+                    bossRect.top -
+                    35
+                ) + "px";
+
+            rageText.style.transform =
+                "translate(-50%, -50%) scale(0.4)";
+
+            rageText.style.color =
+                "#ff2222";
+
+            rageText.style.fontSize =
+                "55px";
+
+            rageText.style.fontWeight =
+                "900";
+
+            rageText.style.zIndex =
+                "10000";
+
+            rageText.style.pointerEvents =
+                "none";
+
+            rageText.style.textShadow =
+                "0 0 5px white, 0 0 15px red, 0 0 30px darkred";
+
+            rageText.style.transition =
+                "transform .5s ease-out, opacity .5s ease-out";
+
+            document.body.appendChild(
+                rageText
+            );
+
+            requestAnimationFrame(() => {
+
+                rageText.style.transform =
+                    "translate(-50%, -50%) scale(1.1)";
+
+            });
+
+            setTimeout(() => {
+
+                rageText.style.transform =
+                    "translate(-50%, -50%) scale(0.9)";
+
+                rageText.style.opacity =
+                    "0";
+
+            },700);
+
+            setTimeout(() => {
+
+                rageText.remove();
+
+            },1200);
+
+        }
+
+    }else{
+
+        bossElement.classList.remove(
+            "rage"
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   RANKING
+============================================================ */
+
+function updateRanking(){
+
+    /* =====================================
+       CONFIGURA O GRID EM 3 COLUNAS
+    ===================================== */
+
+    const panelGrid =
+        document.querySelector(".panelGrid");
+
+    if(panelGrid){
+
+        panelGrid.style.gridTemplateColumns =
+            "1fr 1fr 1fr";
+
+    }
+
+
+    /* =====================================
+       TOP DAMAGE
+    ===================================== */
+
+    const ranking =
+        [...players]
+        .sort(
+            (a,b) =>
+                b.totalDamage - a.totalDamage
+        )
+        .slice(0,5);
+
+
+    rankingElement.innerHTML =
+        ranking
+        .map(
+            (p,index) =>
+                (index + 1) +
+                ". " +
+                p.icon +
+                " " +
+                p.name +
+                " — " +
+                p.totalDamage.toLocaleString("en-US")
+        )
+        .join("<br>");
+
+
+    /* =====================================
+       CRIA TOP HEALER
+    ===================================== */
+
+    let healerPanel =
+        document.getElementById(
+            "topHealerPanel"
+        );
+
+
+    if(!healerPanel){
+
+        healerPanel =
+            document.createElement("div");
+
+        healerPanel.id =
+            "topHealerPanel";
+
+        healerPanel.className =
+            "panel";
+
+        healerPanel.innerHTML = `
+            <div class="panelTitle">
+                ✝️ TOP HEALER
+            </div>
+
+            <div
+                class="panelText"
+                id="healerRanking">
+                —
+            </div>
+        `;
+
+        panelGrid.appendChild(
+            healerPanel
+        );
+
+    }
+
+
+    /* =====================================
+       TOP HEALER
+    ===================================== */
+
+    const healerRanking =
+        [...players]
+        .filter(
+            p =>
+                p.class === "PRIEST"
+        )
+        .sort(
+            (a,b) =>
+                b.healing - a.healing
+        )
+        .slice(0,5);
+
+
+    const healerRankingElement =
+        document.getElementById(
+            "healerRanking"
+        );
+
+
+    if(healerRankingElement){
+
+        healerRankingElement.innerHTML =
+            healerRanking.length > 0
+
+            ?
+
+            healerRanking
+            .map(
+                (p,index) =>
+                    (index + 1) +
+                    ". " +
+                    p.icon +
+                    " " +
+                    p.name +
+                    " — " +
+                    p.healing.toLocaleString("en-US")
+            )
+            .join("<br>")
+
+            :
+
+            "—";
+
+    }
+
+}
+
+
+/* ============================================================
+   UPDATE GERAL
+============================================================ */
+
+function update(){
+
+    const percent =
+        Math.max(
+            0,
+            bossHp / maxBossHp
+        ) * 100;
+
+
+    bossHpFill.style.width =
+        percent + "%";
+
+
+    bossHpText.textContent =
+        bossHp.toLocaleString("en-US") +
+        " / " +
+        maxBossHp.toLocaleString("en-US") +
+        " HP";
+
+
+    bossLevelElement.textContent =
+        "BOSS LEVEL " +
+        bossLevel;
+
+
+    bossNameElement.textContent =
+        currentBoss.icon +
+        " " +
+        currentBoss.name;
+
+
+    bossElement.textContent =
+        currentBoss.icon;
+
+
+    document.getElementById(
+        "playerCount"
+    ).textContent =
+        players.length;
+
+
+    document.getElementById(
+        "bossStat"
+    ).textContent =
+        bossLevel;
+
+
+    document.getElementById(
+        "wins"
+    ).textContent =
+        wins;
+
+
+    /*
+       Update player HP and XP.
+    */
+
+    players.forEach(
+        updatePlayerUI
+    );
+
+
+    /*
+       Rebuild the formation only when
+       something structural changed.
+    */
+
+    const formationKey =
+        players.map(
+            player =>
+                player.id +
+                ":" +
+                player.class +
+                ":" +
+                player.alive
+        ).join("|");
+
+
+    if(
+        window.lastFormationKey !==
+        formationKey
+    ){
+
+        sortFormation();
+
+        window.lastFormationKey =
+            formationKey;
+
+    }
+
+
+    updateRanking();
+
+    checkBossRage();
+
+
+    if(bossHp <= 0){
+
+        bossDefeated();
+
+    }
+
+}
+
+
+/* ============================================================
+   BOSS DEFEATED
+============================================================ */
+
+let bossEnding = false;
+
+
+function bossDefeated(){
+
+    if(bossEnding){
+        return;
+    }
+
+
+    bossEnding = true;
+    battlePaused = true;
+
+
+    /* =====================================
+       💀 BOSS DEATH SOUND
+    ===================================== */
+
+    const bossDeathSound =
+        new Audio("monsterdeath.wav");
+
+    bossDeathSound.volume =
+        0.9;
+
+    bossDeathSound.play()
+        .catch(()=>{});
+
+
+    wins++;
+
+
+    /*
+       Não gera o próximo Boss localmente.
+
+       O servidor será responsável por
+       definir o próximo Boss oficial.
+    */
+
+
+    /*
+       Mostra imediatamente a prévia do próximo boss.
+       O Worker confirma o boss oficial após o contador.
+    */
+
+    if(!window.nextBossPreview){
+
+        window.nextBossPreview =
+            generateBoss(
+                bossLevel + 1
+            );
+
+    }
+
+    victoryBoss.textContent =
+        window.nextBossPreview.icon;
+
+    const nextBattleTitle =
+        document.getElementById("resultTitle");
+
+    if(nextBattleTitle){
+
+        nextBattleTitle.textContent =
+            "⚔️ NEXT BATTLE!";
+
+    }
+
+
+    const nextBossNameElement =
+        document.getElementById(
+            "victoryNextBossName"
+        );
+
+    if(nextBossNameElement){
+
+        nextBossNameElement.textContent =
+            "NEXT BOSS";
+
+    }
+
+
+    /*
+       Show victory screen.
+    */
+
+    victory.classList.add(
+        "active"
+    );
+
+    flash.classList.add(
+        "active"
+    );
+
+
+    addEvent(
+
+        "🏆 " +
+        currentBoss.name +
+        " defeated!"
+
+    );
+
+
+    let countdown = 3;
+
+    /* Cancela qualquer contador antigo antes de iniciar outro. */
+    if(window.nextBossCountdownTimer){
+        clearTimeout(window.nextBossCountdownTimer);
+    }
+
+    function showNextBossCountdown(){
+
+        victoryText.textContent =
+            "NEXT BOSS IN " +
+            countdown;
+
+        if(countdown === 1){
+
+            window.nextBossCountdownTimer =
+                setTimeout(() => {
+                    window.nextBossCountdownTimer = null;
+                    nextBoss();
+                },1000);
+
+            return;
+
+        }
+
+        countdown--;
+
+        window.nextBossCountdownTimer =
+            setTimeout(
+                showNextBossCountdown,
+                1000
+            );
+
+    }
+
+    showNextBossCountdown();
+
+}
+
+
+/* ============================================================
+   NEXT BOSS
+============================================================ */
+
+function nextBoss(){
+
+    /*
+       🌐 MULTIPLAYER
+
+       O navegador não decide mais
+       sozinho qual será o próximo boss.
+
+       Ele apenas solicita a troca
+       ao servidor.
+    */
+
+    if(
+        multiplayerSocket.readyState !==
+        WebSocket.OPEN
+    ){
+
+        return;
+
+    }
+
+
+    /*
+       Só pode avançar quando
+       o boss atual foi derrotado.
+    */
+
+    if(bossHp > 0){
+
+        return;
+
+    }
+
+
+    /*
+       Próximo nível.
+    */
+
+    const requestedBossLevel =
+        bossLevel + 1;
+
+
+    /*
+       Geração temporária do boss.
+
+       O servidor vai aceitar apenas
+       o PRIMEIRO pedido válido.
+    */
+
+    let requestedBoss;
+
+
+    if(window.nextBossPreview){
+
+        requestedBoss =
+            window.nextBossPreview;
+
+        window.nextBossPreview =
+            null;
+
+    }else{
+
+        requestedBoss =
+            generateBoss(
+                requestedBossLevel
+            );
+
+    }
+
+
+    /*
+       Envia pedido para o servidor.
+    */
+
+    multiplayerSocket.send(
+
+        JSON.stringify({
+
+            type:
+                "nextBoss",
+
+            bossLevel:
+                requestedBossLevel,
+
+            currentBoss:
+                requestedBoss,
+
+            maxBossHp:
+                requestedBoss.hp,
+
+            bossHp:
+                requestedBoss.hp
+
+        })
+
+    );
+
+
+    console.log(
+
+        "🌐 NEXT BOSS REQUEST SENT:",
+
+        requestedBossLevel,
+
+        requestedBoss.name
+
+    );
+
+}
+
+
+/* ============================================================
+   AUTOMATIC PLAYER ENTRY
+============================================================ */
+
+function startPlayerEntries(){
+
+    /*
+       🌐 MULTIPLAYER
+
+       Cada navegador representa
+       apenas 1 jogador.
+    */
+
+    if(players.length >= 1){
+        return;
+    }
+
+
+    createPlayer();
+
+}
+
+
+/* ============================================================
+   AUTOMATIC ATTACKS
+============================================================ */
+
+function startPlayerAI(player){
+
+    function nextAction(){
+
+        if(!player.alive){
+
+            setTimeout(
+                nextAction,
+                500
+            );
+
+            return;
+
+        }
+
+
+        if(battlePaused){
+
+            setTimeout(
+                nextAction,
+                500
+            );
+
+            return;
+
+        }
+
+
+        if(player.class === "PRIEST"){
+
+            healerAction(player);
+
+        }else{
+
+            playerAttack(player);
+
+        }
+
+
+        setTimeout(
+            nextAction,
+            player.speed
+        );
+
+    }
+
+
+    setTimeout(
+        nextAction,
+        player.speed
+    );
+
+}
+
+
+
+/* =========================================
+   AUTOMATIC SKILL TEST
+========================================= */
+
+/* =========================================
+   🎯 AUTOMATIC SKILL TEST
+   One skill at a time, at a random interval
+========================================= */
+
+function testRandomSkill(){
+
+    /*
+       🌐 MULTIPLAYER
+
+       A skill agora é decidida
+       pelo servidor.
+
+       O navegador apenas solicita
+       uma nova skill.
+    */
+
+    if(
+        multiplayerSocket.readyState !==
+        WebSocket.OPEN
+    ){
+
+        return;
+
+    }
+
+
+    if(battlePaused){
+
+        return;
+
+    }
+
+
+    multiplayerSocket.send(
+
+        JSON.stringify({
+
+            type:
+                "skill"
+
+        })
+
+    );
+
+
+    console.log(
+        "✨ SKILL REQUEST SENT"
+    );
+
+}
+
+
+/* =========================================
+   ⏱️ NEXT SKILL
+   Entre 3 e 7 segundos
+========================================= */
+
+function scheduleNextSkill(){
+
+    const delay =
+        Math.floor(
+            Math.random() * 4000
+        ) + 3000;
+
+
+    setTimeout(()=>{
+
+        /*
+           Executes the next skill.
+        */
+
+        try{
+
+            testRandomSkill();
+
+        }catch(error){
+
+            console.error(
+                "Skill error:",
+                error
+            );
+
+        }
+
+
+        /*
+           Even if a skill fails,
+           schedule the next one.
+        */
+
+        scheduleNextSkill();
+
+    },delay);
+
 }
 
 
 /*
-   Creates the AI for each player
-   when they join.
+   Os testes automáticos locais ficam desligados.
+   Habilidades reais chegarão da Twitch pelo Worker.
 */
 
+const LOCAL_TEST_MODE = true;
+
 if(LOCAL_TEST_MODE){
-
-setInterval(()=>{
-
-    players.forEach(player => {
-
-        if(player.aiStarted){
-            return;
-        }
+    scheduleNextSkill();
+}
 
 
-        startPlayerAI(player);
+let bossAttackTimer = null;
 
+function scheduleBossAttack(){
 
-        player.aiStarted = true;
+    if(bossAttackTimer){
+        clearTimeout(
+            bossAttackTimer
+        );
+    }
 
-    });
+    /*
+       Base attack interval:
+       5 seconds.
 
-},500);
+       Higher Boss levels become faster.
+    */
+
+    let attackSpeed =
+        5000 -
+        (bossLevel - 1) * 40;
+
+    /*
+       Minimum normal attack interval.
+    */
+
+    attackSpeed =
+        Math.max(
+            2500,
+            attackSpeed
+        );
+
+    /*
+       🔥 RAGE
+       Below 25% HP:
+       Boss attacks 30% faster.
+    */
+
+    if(
+        bossHp <= maxBossHp * 0.25
+    ){
+
+        attackSpeed =
+            Math.floor(
+                attackSpeed * 0.70
+            );
+
+    }
+
+    bossAttackTimer =
+        setTimeout(() => {
+
+            bossAttack();
+
+            scheduleBossAttack();
+
+        }, attackSpeed);
 
 }
+
+
+/*
+   Start the Boss attack cycle.
+*/
+
+scheduleBossAttack();
+
+
+/* ============================================================
+   INITIALIZATION
+============================================================ */
+
+/*
    A IA oficial agora é criada e controlada
    exclusivamente pelo Worker.
 
@@ -183,4 +8869,12 @@ setInterval(()=>{
 */
 
 /* ============================================================
-  FIRST UPDATE
+   FIRST UPDATE
+============================================================ */
+
+update();
+
+</script>
+
+</body>
+</html>
