@@ -562,41 +562,46 @@ ensureAI() {
   // ========== CICLO DE VIDA ==========
   onStart() {
     console.log("🔥 BOSS FIGHT SERVER STARTED");
-    
+
+    // ===== FORÇA A RECRIAÇÃO DA IA (GARANTE QUE SEJA TANK) =====
+    this.players.delete("AI-1");
+
+    // Inicializa o gameState se não existir
     if (!this.gameState) {
-      const boss = { name: "DEMON LORD", icon: "👹", hp: 10000, special: false };
-      this.gameState = {
-        bossLevel: 1,
-        currentBoss: boss,
-        maxBossHp: 10000,
-        bossHp: 10000,
-        wins: 0,
-        nextBossAttackAt: 0
-      };
-      console.log("🎮 GAME STATE INICIALIZADO:", this.gameState);
+        const boss = { name: "DEMON LORD", icon: "👹", hp: 10000, special: false };
+        this.gameState = {
+            bossLevel: 1,
+            currentBoss: boss,
+            maxBossHp: 10000,
+            bossHp: 10000,
+            wins: 0,
+            nextBossAttackAt: 0
+        };
+        console.log("🎮 GAME STATE INICIALIZADO:", this.gameState);
     }
-    
+
+    // Cria a IA (agora sempre TANK)
     this.ensureAI();
-    
+
     if (this.botTimer) {
-      clearTimeout(this.botTimer);
-      this.botTimer = null;
+        clearTimeout(this.botTimer);
+        this.botTimer = null;
     }
     this.scheduleAIAttack(1000);
-    
-    this.connectTwitchChat();
-  }
 
-  onConnect(connection: Connection) {
+    this.connectTwitchChat();
+}
+
+onConnect(connection: Connection) {
     this.ensureAI();
     console.log("🟢 PLAYER CONNECTED:", connection.id);
-    
+
     if (!this.botTimer) {
-      this.scheduleAIAttack(1000);
+        this.scheduleAIAttack(1000);
     }
-    
+
     this.sendRoomState(connection);
-  }
+}
 
   onMessage(connection: Connection, message: WSMessage) {
     try {
