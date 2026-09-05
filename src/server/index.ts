@@ -23,10 +23,9 @@ export class Chat extends Server<Env> {
     return stats[className] || stats.WARRIOR;
   }
 
-  getRandomAIClass() {
-    const classes = ["TANK", "WARRIOR", "ARCHER", "MAGE", "PRIEST"];
-    return classes[Math.floor(Math.random() * classes.length)];
-  }
+getRandomAIClass() {
+    return "TANK";
+}
 
   ensureAI() {
     const aiId = "AI-1";
