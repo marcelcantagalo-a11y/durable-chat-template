@@ -2628,257 +2628,384 @@ multiplayerSocket.onopen = () => {
 
 multiplayerSocket.onmessage = (event) => {
 
-    try{
+    try {
 
         const data =
             JSON.parse(event.data);
-
 
         console.log(
             "📡 SERVER MESSAGE:",
             data
         );
 
+        /* =====================================
+           🌐 ESTADO DA SALA
+        ===================================== */
 
-/* =====================================
-   🌐 ESTADO DA SALA
-===================================== */
+        if (data.type === "roomState") {
 
-if(data.type === "roomState"){
+            /* =====================================
+               🔄 RESET OFICIAL DA BATALHA
+            ===================================== */
+            if (data.reset === true) {
+                players.length = 0;
 
-    /* =====================================
-       🔄 RESET OFICIAL DA BATALHA
-    ===================================== */
-    if(data.reset === true){
-        players.length = 0;
+                if (playersContainer) {
+                    playersContainer.innerHTML = "";
+                }
 
-        if(playersContainer){
-            playersContainer.innerHTML = "";
-        }
-
-        nextPlayerId = 1;
-        gameOverHandled = false;
-        bossEnding = false;
-        battlePaused = false;
-
-        victory.classList.remove("active");
-        victory.classList.remove("gameOver");
-        flash.classList.remove("active");
-
-        const trophyElement =
-            victory.querySelector(".victoryTrophy");
-
-        if(trophyElement){
-            trophyElement.style.display = "block";
-        }
-    }
-
-    console.log(
-        "👥 PLAYERS IN ROOM:",
-        data.players
-    );
-
-    /* =====================================
-       🎮 APLICA O ESTADO OFICIAL DA PARTIDA
-    ===================================== */
-
-    if(data.gameState){
-
-        const isInitialRoomState =
-            !hasReceivedInitialRoomState;
-
-        const previousBossLevel =
-            bossLevel;
-
-        bossLevel =
-            data.gameState.bossLevel;
-
-        currentBoss =
-            data.gameState.currentBoss;
-
-        maxBossHp =
-            data.gameState.maxBossHp;
-
-        bossHp =
-            data.gameState.bossHp;
-
-        wins =
-            data.gameState.wins;
-
-        console.log(
-            "🎮 OFFICIAL GAME STATE:",
-            data.gameState
-        );
-
-        /*
-           👑 NOVO BOSS OFICIAL
-           Quando o servidor avançar
-           para o próximo Boss, todas
-           as telas recebem este evento.
-        */
-
-        if(
-            !isInitialRoomState &&
-            bossLevel >
-            previousBossLevel
-        ){
-
-            console.log(
-                "👑 NEW OFFICIAL BOSS:",
-                bossLevel,
-                currentBoss.name
-            );
-
-            bossEnding = false;
-
-            battlePaused = true;
-
-            /*
-               Remove flash antigo.
-            */
-
-            flash.classList.remove(
-                "active"
-            );
-
-            /*
-               Mostra o novo Boss.
-            */
-
-            const titleElement =
-                document.getElementById(
-                    "resultTitle"
-                );
-
-            if(titleElement){
-
-                titleElement.textContent =
-                    "⚔️ NEXT BATTLE!";
-
-            }
-
-            victoryBoss.textContent =
-                currentBoss.icon;
-
-            victoryText.textContent =
-                currentBoss.name +
-                " — GET READY!";
-
-            const nextBossNameElement =
-                document.getElementById(
-                    "victoryNextBossName"
-                );
-
-            if(nextBossNameElement){
-
-                nextBossNameElement.textContent =
-                    currentBoss.name;
-
-            }
-
-            victory.classList.add(
-                "active"
-            );
-
-            /*
-               Após a entrada do Boss,
-               libera a batalha.
-            */
-
-            setTimeout(() => {
-
-                victory.classList.remove(
-                    "active"
-                );
-
+                nextPlayerId = 1;
+                gameOverHandled = false;
+                bossEnding = false;
                 battlePaused = false;
 
-                if(currentBoss.special){
+                victory.classList.remove("active");
+                victory.classList.remove("gameOver");
+                flash.classList.remove("active");
 
-                    eventBox.textContent =
-                        "👑 LEGENDARY BOSS! " +
+                const trophyElement =
+                    victory.querySelector(".victoryTrophy");
+
+                if (trophyElement) {
+                    trophyElement.style.display = "block";
+                }
+            }
+
+            console.log(
+                "👥 PLAYERS IN ROOM:",
+                data.players
+            );
+
+            /* =====================================
+               🎮 APLICA O ESTADO OFICIAL DA PARTIDA
+            ===================================== */
+
+            if (data.gameState) {
+
+                const isInitialRoomState =
+                    !hasReceivedInitialRoomState;
+
+                const previousBossLevel =
+                    bossLevel;
+
+                bossLevel =
+                    data.gameState.bossLevel;
+
+                currentBoss =
+                    data.gameState.currentBoss;
+
+                maxBossHp =
+                    data.gameState.maxBossHp;
+
+                bossHp =
+                    data.gameState.bossHp;
+
+                wins =
+                    data.gameState.wins;
+
+                console.log(
+                    "🎮 OFFICIAL GAME STATE:",
+                    data.gameState
+                );
+
+                /*
+                   👑 NOVO BOSS OFICIAL
+                   Quando o servidor avançar
+                   para o próximo Boss, todas
+                   as telas recebem este evento.
+                */
+
+                if (
+                    !isInitialRoomState &&
+                    bossLevel >
+                    previousBossLevel
+                ) {
+
+                    console.log(
+                        "👑 NEW OFFICIAL BOSS:",
+                        bossLevel,
+                        currentBoss.name
+                    );
+
+                    bossEnding = false;
+
+                    battlePaused = true;
+
+                    /*
+                       Remove flash antigo.
+                    */
+
+                    flash.classList.remove(
+                        "active"
+                    );
+
+                    /*
+                       Mostra o novo Boss.
+                    */
+
+                    const titleElement =
+                        document.getElementById(
+                            "resultTitle"
+                        );
+
+                    if (titleElement) {
+
+                        titleElement.textContent =
+                            "⚔️ NEXT BATTLE!";
+
+                    }
+
+                    victoryBoss.textContent =
+                        currentBoss.icon;
+
+                    victoryText.textContent =
                         currentBoss.name +
-                        " ENTERED THE ARENA!";
+                        " — GET READY!";
 
-                    addEvent(
-                        "👑 SPECIAL BOSS LV." +
-                        bossLevel
+                    const nextBossNameElement =
+                        document.getElementById(
+                            "victoryNextBossName"
+                        );
+
+                    if (nextBossNameElement) {
+
+                        nextBossNameElement.textContent =
+                            currentBoss.name;
+
+                    }
+
+                    victory.classList.add(
+                        "active"
                     );
 
-                }else{
+                    /*
+                       Após a entrada do Boss,
+                       libera a batalha.
+                    */
 
-                    eventBox.textContent =
-                        "🔥 BOSS LEVEL " +
-                        bossLevel +
-                        " ENTERED THE ARENA!";
+                    setTimeout(() => {
 
-                    addEvent(
-                        "🔥 New Boss LV." +
-                        bossLevel
-                    );
+                        victory.classList.remove(
+                            "active"
+                        );
+
+                        battlePaused = false;
+
+                        if (currentBoss.special) {
+
+                            eventBox.textContent =
+                                "👑 LEGENDARY BOSS! " +
+                                currentBoss.name +
+                                " ENTERED THE ARENA!";
+
+                            addEvent(
+                                "👑 SPECIAL BOSS LV." +
+                                bossLevel
+                            );
+
+                        } else {
+
+                            eventBox.textContent =
+                                "🔥 BOSS LEVEL " +
+                                bossLevel +
+                                " ENTERED THE ARENA!";
+
+                            addEvent(
+                                "🔥 New Boss LV." +
+                                bossLevel
+                            );
+
+                        }
+
+                        update();
+
+                    }, 2500);
 
                 }
 
-                update();
-
-            },2500);
-
-        }
-
-        hasReceivedInitialRoomState = true;
-
-    }
-
-    /* =====================================
-       👥 JOGADORES
-    ===================================== */
-
-    data.players.forEach(
-        remotePlayer => {
-
-            /*
-               Procura o jogador local.
-            */
-
-            const localPlayer =
-                players.find(
-                    player =>
-                        !player.remoteId
-                );
-
-            /*
-               Se o servidor devolveu
-               o próprio jogador local,
-               vincula o ID do servidor.
-            */
-
-            if(
-                localPlayer &&
-                localPlayer.name ===
-                    remotePlayer.name &&
-                localPlayer.class ===
-                    remotePlayer.class
-            ){
-
-                localPlayer.remoteId =
-                    remotePlayer.id;
-
-                localPlayer.serverPosition =
-                    remotePlayer.position;
-
-                console.log(
-                    "✅ LOCAL PLAYER LINKED:",
-                    localPlayer.name
-                );
-
-                return;
+                hasReceivedInitialRoomState = true;
 
             }
 
-            /*
-               Verifica se o jogador remoto
-               já existe.
-            */
+            /* =====================================
+               👥 JOGADORES
+            ===================================== */
+
+            data.players.forEach(
+                remotePlayer => {
+
+                    /*
+                       Procura o jogador local.
+                    */
+
+                    const localPlayer =
+                        players.find(
+                            player =>
+                                !player.remoteId
+                        );
+
+                    /*
+                       Se o servidor devolveu
+                       o próprio jogador local,
+                       vincula o ID do servidor.
+                    */
+
+                    if (
+                        localPlayer &&
+                        localPlayer.name ===
+                        remotePlayer.name &&
+                        localPlayer.class ===
+                        remotePlayer.class
+                    ) {
+
+                        localPlayer.remoteId =
+                            remotePlayer.id;
+
+                        localPlayer.serverPosition =
+                            remotePlayer.position;
+
+                        console.log(
+                            "✅ LOCAL PLAYER LINKED:",
+                            localPlayer.name
+                        );
+
+                        return;
+
+                    }
+
+                    /*
+                       Verifica se o jogador remoto
+                       já existe.
+                    */
+
+                    const alreadyExists =
+                        players.some(
+                            player =>
+                                player.remoteId ===
+                                remotePlayer.id
+                        );
+
+                    if (alreadyExists) {
+                        return;
+                    }
+
+                    /*
+                       Jogador realmente remoto.
+                    */
+
+                    const classData =
+                        classes.find(
+                            c =>
+                                c.name ===
+                                remotePlayer.class
+                        );
+
+                    if (!classData) {
+                        return;
+                    }
+
+                    const remotePlayerObject = {
+
+                        id:
+                            nextPlayerId++,
+
+                        remoteId:
+                            remotePlayer.id,
+
+                        serverPosition:
+                            remotePlayer.position,
+
+                        name:
+                            remotePlayer.name,
+
+                        class:
+                            remotePlayer.class,
+
+                        icon:
+                            classIcons[
+                                remotePlayer.class
+                            ],
+
+                        damage: [
+                            classData.damage[0],
+                            classData.damage[1]
+                        ],
+
+                        speed:
+                            classData.speed,
+
+                        level:
+                            remotePlayer.level ||
+                            1,
+
+                        xp:
+                            remotePlayer.xp ||
+                            0,
+
+                        nextXp:
+                            100,
+
+                        maxHp:
+                            remotePlayer.maxHp ||
+                            classData.hp,
+
+                        hp:
+                            remotePlayer.hp ??
+                            classData.hp,
+
+                        alive:
+                            remotePlayer.alive ??
+                            true,
+
+                        totalDamage:
+                            remotePlayer.totalDamage ||
+                            0,
+
+                        healing:
+                            remotePlayer.healing ||
+                            0,
+
+                        isAI:
+                            remotePlayer.isAI === true
+
+                    };
+
+                    players.push(
+                        remotePlayerObject
+                    );
+
+                    createPlayerUI(
+                        remotePlayerObject
+                    );
+
+                    // ===== INICIA ATAQUE PARA HUMANOS (roomState) =====
+                    if (!remotePlayerObject.isAI) {
+                        startPlayerAI(remotePlayerObject);
+                        console.log("⚔️ ATAQUE INICIADO PARA (roomState):", remotePlayerObject.name);
+                    }
+
+                    addEvent(
+                        remotePlayerObject.icon +
+                        " " +
+                        remotePlayerObject.name +
+                        " joined!"
+                    );
+
+                }
+            );
+
+            update();
+
+        } // FIM DO if(data.type === "roomState")
+
+        /* =====================================
+           ⚔️ NOVO JOGADOR ENTROU
+        ===================================== */
+
+        else if (data.type === "playerJoined") {
+
+            const remotePlayer =
+                data.player;
 
             const alreadyExists =
                 players.some(
@@ -2887,13 +3014,9 @@ if(data.type === "roomState"){
                         remotePlayer.id
                 );
 
-            if(alreadyExists){
+            if (alreadyExists) {
                 return;
             }
-
-            /*
-               Jogador realmente remoto.
-            */
 
             const classData =
                 classes.find(
@@ -2902,11 +3025,11 @@ if(data.type === "roomState"){
                         remotePlayer.class
                 );
 
-            if(!classData){
+            if (!classData) {
                 return;
             }
 
-            const remotePlayerObject = {
+            const newRemotePlayer = {
 
                 id:
                     nextPlayerId++,
@@ -2928,7 +3051,7 @@ if(data.type === "roomState"){
                         remotePlayer.class
                     ],
 
-                damage:[
+                damage: [
                     classData.damage[0],
                     classData.damage[1]
                 ],
@@ -2936,36 +3059,23 @@ if(data.type === "roomState"){
                 speed:
                     classData.speed,
 
-                level:
-                    remotePlayer.level ||
-                    1,
+                level: 1,
 
-                xp:
-                    remotePlayer.xp ||
-                    0,
+                xp: 0,
 
-                nextXp:
-                    100,
+                nextXp: 100,
 
                 maxHp:
-                    remotePlayer.maxHp ||
                     classData.hp,
 
                 hp:
-                    remotePlayer.hp ??
                     classData.hp,
 
-                alive:
-                    remotePlayer.alive ??
-                    true,
+                alive: true,
 
-                totalDamage:
-                    remotePlayer.totalDamage ||
-                    0,
+                totalDamage: 0,
 
-                healing:
-                    remotePlayer.healing ||
-                    0,
+                healing: 0,
 
                 isAI:
                     remotePlayer.isAI === true
@@ -2973,30 +3083,659 @@ if(data.type === "roomState"){
             };
 
             players.push(
-                remotePlayerObject
+                newRemotePlayer
             );
 
             createPlayerUI(
-                remotePlayerObject
+                newRemotePlayer
             );
 
-            // ===== INICIA ATAQUE PARA HUMANOS (roomState) =====
-            if (!remotePlayerObject.isAI) {
-                startPlayerAI(remotePlayerObject);
-                console.log("⚔️ ATAQUE INICIADO PARA (roomState):", remotePlayerObject.name);
+            // ===== INICIA ATAQUE PARA HUMANOS (playerJoined) =====
+            if (!newRemotePlayer.isAI) {
+                startPlayerAI(newRemotePlayer);
+                console.log("⚔️ ATAQUE INICIADO PARA:", newRemotePlayer.name);
             }
 
-            addEvent(
-                remotePlayerObject.icon +
+            eventBox.textContent =
+                newRemotePlayer.icon +
                 " " +
-                remotePlayerObject.name +
+                newRemotePlayer.name +
+                " joined the battle!";
+
+            addEvent(
+                newRemotePlayer.icon +
+                " " +
+                newRemotePlayer.name +
                 " joined!"
             );
 
-        }
-    );
+            update();
 
-    update();
+        }
+
+        /* =====================================
+           🔴 JOGADOR SAIU
+        ===================================== */
+
+        else if (data.type === "playerLeft") {
+
+            const playerIndex =
+                players.findIndex(
+                    player =>
+                        player.remoteId ===
+                        data.playerId
+                );
+
+            if (playerIndex === -1) {
+                return;
+            }
+
+            const player =
+                players[playerIndex];
+
+            const element =
+                document.getElementById(
+                    "player-" + player.id
+                );
+
+            if (element) {
+                element.remove();
+            }
+
+            players.splice(
+                playerIndex,
+                1
+            );
+
+            addEvent(
+                "🔴 " +
+                player.name +
+                " left the battle!"
+            );
+
+            update();
+
+        }
+
+        /* =====================================
+           🔄 PLAYER UPDATED
+        ===================================== */
+
+        else if (data.type === "playerUpdated") {
+
+            const remotePlayer =
+                data.player;
+
+            const localPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
+
+            if (!localPlayer) {
+                return;
+            }
+
+            Object.assign(
+                localPlayer,
+                remotePlayer
+            );
+
+            update();
+
+        }
+
+        /* =====================================
+           ⚔️ RESULTADO DO ATAQUE
+        ===================================== */
+
+        else if (data.type === "attackResult") {
+
+            const attackingPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.playerId
+                );
+
+            if (!attackingPlayer) {
+                return;
+            }
+
+            bossHp =
+                data.bossHp;
+
+            maxBossHp =
+                data.maxBossHp;
+
+            if (!data.hit) {
+
+                const bossRect =
+                    bossElement.getBoundingClientRect();
+
+                const missText =
+                    document.createElement(
+                        "div"
+                    );
+
+                missText.textContent =
+                    "MISS";
+
+                missText.style.position =
+                    "fixed";
+
+                missText.style.left =
+                    (
+                        bossRect.left +
+                        bossRect.width / 2 -
+                        25
+                    ) + "px";
+
+                missText.style.top =
+                    (
+                        bossRect.top +
+                        bossRect.height / 2 -
+                        35
+                    ) + "px";
+
+                missText.style.color =
+                    "#aaaaaa";
+
+                missText.style.fontSize =
+                    "18px";
+
+                missText.style.fontWeight =
+                    "900";
+
+                missText.style.textShadow =
+                    "0 1px 3px #000";
+
+                missText.style.zIndex =
+                    "9999";
+
+                missText.style.pointerEvents =
+                    "none";
+
+                document.body.appendChild(
+                    missText
+                );
+
+                eventBox.textContent =
+                    attackingPlayer.name +
+                    " missed the attack";
+
+                addEvent(
+                    attackingPlayer.name +
+                    " missed the attack"
+                );
+
+                const missSound =
+                    new Audio(
+                        "miss.mp3"
+                    );
+
+                missSound.volume =
+                    0.7;
+
+                missSound.play()
+                    .catch(() => {});
+
+                setTimeout(
+                    () => {
+
+                        missText.remove();
+
+                    },
+                    700
+                );
+
+                update();
+
+                return;
+
+            }
+
+            attackingPlayer.totalDamage =
+                data.totalDamage;
+
+            if (
+                typeof data.level ===
+                "number"
+            ) {
+
+                attackingPlayer.level =
+                    data.level;
+
+            }
+
+            launchProjectile(
+                attackingPlayer
+            );
+
+            if (data.critical) {
+
+                eventBox.textContent =
+                    "💥 CRITICAL! " +
+                    attackingPlayer.name +
+                    " dealt " +
+                    data.damage.toLocaleString(
+                        "en-US"
+                    ) +
+                    " damage!";
+
+            } else {
+
+                eventBox.textContent =
+                    attackingPlayer.icon +
+                    " " +
+                    attackingPlayer.name +
+                    " dealt " +
+                    data.damage.toLocaleString(
+                        "en-US"
+                    ) +
+                    " damage!";
+
+            }
+
+            addEvent(
+                attackingPlayer.name +
+                " dealt " +
+                data.damage.toLocaleString(
+                    "en-US"
+                ) +
+                " damage!"
+            );
+
+            const attackingElement =
+                document.getElementById(
+                    "player-" +
+                    attackingPlayer.id
+                );
+
+            if (attackingElement) {
+
+                attackingElement.classList.add(
+                    "attacking"
+                );
+
+                setTimeout(
+                    () => {
+
+                        attackingElement.classList.remove(
+                            "attacking"
+                        );
+
+                    },
+                    350
+                );
+
+            }
+
+            update();
+
+        }
+
+        /* =====================================
+           👹 ATAQUE OFICIAL DO BOSS
+        ===================================== */
+
+        else if (data.type === "bossAttackResult") {
+
+            const targetPlayer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.targetId
+                );
+
+            if (!targetPlayer) {
+                return;
+            }
+
+            const wasAlive = targetPlayer.alive;
+
+            targetPlayer.hp = data.hp;
+            targetPlayer.maxHp = data.maxHp;
+            targetPlayer.alive = data.alive;
+
+            const alivePlayersAfterBossHit =
+                players.filter(
+                    player => player.alive
+                );
+
+            if (
+                wasAlive &&
+                !targetPlayer.alive &&
+                alivePlayersAfterBossHit.length === 0
+            ) {
+
+                bossEnding = true;
+                battlePaused = true;
+
+                const trophyElement =
+                    victory.querySelector(
+                        ".victoryTrophy"
+                    );
+
+                if (trophyElement) {
+                    trophyElement.style.display =
+                        "none";
+                }
+
+                const gameOverSound1 =
+                    new Audio("gameover.mp3");
+
+                const gameOverSound2 =
+                    new Audio("gameover.mp3");
+
+                const gameOverSound3 =
+                    new Audio("gameover.mp3");
+
+                gameOverSound1.volume = 1.0;
+                gameOverSound2.volume = 1.0;
+                gameOverSound3.volume = 1.0;
+
+                gameOverSound1.play()
+                    .catch(() => {});
+
+                gameOverSound2.play()
+                    .catch(() => {});
+
+                gameOverSound3.play()
+                    .catch(() => {});
+
+                setTimeout(() => {
+
+                    const gameOverLaugh =
+                        new Audio("gameoverlaugh.mp3");
+
+                    gameOverLaugh.volume = 1.0;
+
+                    gameOverLaugh.play()
+                        .catch(() => {});
+
+                }, 2000);
+
+                const titleElement =
+                    victory.querySelector(
+                        ".victoryTitle"
+                    );
+
+                if (titleElement) {
+                    titleElement.textContent =
+                        "GAME OVER";
+                }
+
+                victoryBoss.textContent =
+                    "💀";
+
+                victoryText.textContent =
+                    "NEW BATTLE IN 10";
+
+                victory.classList.add(
+                    "gameOver"
+                );
+
+                victory.classList.add(
+                    "active"
+                );
+
+                flash.classList.add(
+                    "active"
+                );
+
+                eventBox.textContent =
+                    "💀 THE BOSS WON! NEW BATTLE IN 10 SECONDS!";
+
+                addEvent(
+                    "💀 GAME OVER!"
+                );
+
+                let countdown = 10;
+
+                const restartInterval =
+                    setInterval(() => {
+
+                        countdown--;
+
+                        if (countdown > 0) {
+
+                            victoryText.textContent =
+                                "NEW BATTLE IN " +
+                                countdown;
+
+                        } else {
+
+                            clearInterval(
+                                restartInterval
+                            );
+
+                            victory.classList.remove(
+                                "active"
+                            );
+
+                            victory.classList.remove(
+                                "gameOver"
+                            );
+
+                            flash.classList.remove(
+                                "active"
+                            );
+
+                            bossEnding = false;
+
+                            battlePaused = false;
+
+                        }
+
+                    }, 1000);
+
+            }
+
+            const bossHitSound =
+                new Audio("golpeboss.mp3");
+
+            bossHitSound.volume = 0.9;
+
+            bossHitSound.play()
+                .catch(() => {});
+
+            if (wasAlive && !targetPlayer.alive) {
+
+                const deathSounds = {
+                    TANK: "tankmorto.mp3",
+                    WARRIOR: "guerreiromorto.mp3",
+                    ARCHER: "archermorto.mp3",
+                    MAGE: "magomorto.mp3",
+                    PRIEST: "healermorto.mp3"
+                };
+
+                const deathSoundFile =
+                    deathSounds[targetPlayer.class];
+
+                if (deathSoundFile) {
+
+                    const deathSound =
+                        new Audio(deathSoundFile);
+
+                    deathSound.volume = 0.9;
+
+                    deathSound.play()
+                        .catch(() => {});
+
+                }
+
+            }
+
+            const targetElement =
+                document.getElementById(
+                    "player-" + targetPlayer.id
+                );
+
+            if (targetElement) {
+
+                targetElement.classList.add(
+                    "battleHit"
+                );
+
+                setTimeout(() => {
+                    targetElement.classList.remove(
+                        "battleHit"
+                    );
+                }, 250);
+
+                const rect =
+                    targetElement.getBoundingClientRect();
+
+                const damageText =
+                    document.createElement("div");
+
+                damageText.className =
+                    "bossDamageNumber";
+
+                damageText.textContent =
+                    "-" + data.damage;
+
+                damageText.style.left =
+                    (rect.left + rect.width / 2) + "px";
+
+                damageText.style.top =
+                    (rect.top + rect.height / 2) + "px";
+
+                document.body.appendChild(damageText);
+
+                setTimeout(() => {
+                    damageText.remove();
+                }, 800);
+
+            }
+
+            eventBox.textContent =
+                data.spellIcon +
+                " " +
+                data.spellName +
+                "! " +
+                targetPlayer.name +
+                " lost " +
+                data.damage +
+                " HP";
+
+            addEvent(
+                data.spellIcon +
+                " " +
+                data.spellName +
+                " hit " +
+                targetPlayer.name
+            );
+
+            update();
+
+        }
+
+        /* =====================================
+           💚 CURA OFICIAL DO PRIEST
+        ===================================== */
+
+        else if (data.type === "healResult") {
+
+            const healer =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.healerId
+                );
+
+            const target =
+                players.find(
+                    player =>
+                        player.remoteId ===
+                        data.targetId
+                );
+
+            if (!healer || !target) {
+                return;
+            }
+
+            target.hp = data.hp;
+            target.maxHp = data.maxHp;
+            target.alive = data.alive;
+            healer.healing = data.healerHealing;
+
+            const targetElement =
+                document.getElementById(
+                    "player-" + target.id
+                );
+
+            if (targetElement) {
+
+                targetElement.classList.add("healing");
+
+                const rect =
+                    targetElement.getBoundingClientRect();
+
+                const healText =
+                    document.createElement("div");
+
+                healText.className =
+                    "damageNumber healNumber";
+                healText.textContent = "+" + data.heal + " HP";
+                healText.style.left =
+                    (rect.left + rect.width / 2) + "px";
+                healText.style.top =
+                    (rect.top + rect.height / 2) + "px";
+
+                document.body.appendChild(healText);
+
+                setTimeout(() => {
+                    targetElement.classList.remove("healing");
+                    healText.remove();
+                }, 800);
+
+            }
+
+            const healerElement =
+                document.getElementById(
+                    "player-" + healer.id
+                );
+
+            if (healerElement) {
+
+                healerElement.classList.add("healerCast");
+
+                setTimeout(() => {
+                    healerElement.classList.remove("healerCast");
+                }, 600);
+
+            }
+
+            eventBox.textContent =
+                "💚 " +
+                healer.name +
+                " HEALED " +
+                target.name +
+                " FOR +" +
+                data.heal +
+                " HP";
+
+            addEvent(eventBox.textContent);
+
+            update();
+
+        }
+
+    } // FIM DO TRY
+
+    catch (error) {
+
+        console.error(
+            "❌ MULTIPLAYER MESSAGE ERROR:",
+            error
+        );
+
+    }
+
+}; // FIM DO onmessage
 
 } // FIM DO roomState
 
