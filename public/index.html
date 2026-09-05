@@ -8545,6 +8545,13 @@ function startPlayerEntries(){
 
 function startPlayerAI(player){
 
+    // ===== IMPEDE MÚLTIPLOS LOOPS PARA O MESMO JOGADOR =====
+    if (player._attackLoopStarted) {
+        console.log("⚠️ Loop de ataque já iniciado para:", player.name);
+        return;
+    }
+    player._attackLoopStarted = true;
+
     console.log("🚀 startPlayerAI chamado para:", player.name, "speed:", player.speed, "alive:", player.alive, "classe:", player.class);
 
     function nextAction(){
