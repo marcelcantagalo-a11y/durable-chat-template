@@ -285,6 +285,7 @@ export class Chat extends Server<Env> {
       await this.ctx.storage.delete("twitch_enabled");
       await this.ctx.storage.delete("twitch_bot_login");
       await this.ctx.storage.delete("twitch_oauth_state");
+      await this.ctx.storage.delete("twitch_token_expires_at");
       
       if (this.twitchSocket) {
         try { this.twitchSocket.close(); } catch {}
@@ -374,15 +375,18 @@ export class Chat extends Server<Env> {
       throw new Error("Conta da Twitch não encontrada");
     }
 
+    // SALVA O REFRESH TOKEN TAMBÉM!
     await this.ctx.storage.put("twitch_access_token", tokenData.access_token);
     await this.ctx.storage.put("twitch_refresh_token", tokenData.refresh_token || null);
     await this.ctx.storage.put("twitch_bot_login", twitchUser.login);
     await this.ctx.storage.put("twitch_enabled", true);
+    await this.ctx.storage.put("twitch_token_expires_at", Date.now() + 4 * 60 * 60 * 1000); // 4 horas
 
     await this.connectTwitchChat();
     return true;
   }
 
+  // ========== MÉTODO PRINCIPAL COM RENOVAÇÃO AUTOMÁTICA ==========
   private async connectTwitchChat() {
     if (this.twitchSocket && this.twitchConnected) {
       console.log("🟣 Twitch chat já está conectado");
@@ -390,14 +394,67 @@ export class Chat extends Server<Env> {
     }
 
     const enabled = await this.ctx.storage.get("twitch_enabled");
-    const token: any = await this.ctx.storage.get("twitch_access_token");
+    let token: any = await this.ctx.storage.get("twitch_access_token");
+    const refreshToken: any = await this.ctx.storage.get("twitch_refresh_token");
     const login: any = await this.ctx.storage.get("twitch_bot_login");
+    const expiresAt: any = await this.ctx.storage.get("twitch_token_expires_at");
 
-    if (!enabled || !token || !login) {
+    if (!enabled || !login) {
       console.log("⚠️ Twitch não está habilitado ou faltam credenciais");
       return;
     }
 
+    // 🔄 VERIFICA SE O TOKEN EXPIROU OU ESTÁ PERTO DE EXPIRAR
+    if (token && expiresAt) {
+      const timeUntilExpiry = Number(expiresAt) - Date.now();
+      if (timeUntilExpiry < 5 * 60 * 1000) { // Menos de 5 minutos
+        console.log(`⏳ Token expira em ${Math.round(timeUntilExpiry / 60000)} minutos. Renovando...`);
+        token = null; // Força renovação
+      }
+    }
+
+    // 🔄 RENOVA O TOKEN SE NECESSÁRIO
+    if (!token && refreshToken) {
+      try {
+        const env = this.getWorkerEnv();
+        console.log("🔄 Tentando renovar token do Twitch...");
+        
+        const response = await fetch("https://id.twitch.tv/oauth2/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: env.TWITCH_CLIENT_ID,
+            client_secret: env.TWITCH_CLIENT_SECRET,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token"
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("❌ Falha ao renovar token:", errorText);
+          // Se falhar, mantém o token antigo (pode estar expirado, mas tentamos)
+          token = await this.ctx.storage.get("twitch_access_token");
+        } else {
+          const data: any = await response.json();
+          token = data.access_token;
+          await this.ctx.storage.put("twitch_access_token", token);
+          await this.ctx.storage.put("twitch_token_expires_at", Date.now() + 4 * 60 * 60 * 1000);
+          console.log("✅ Token do Twitch renovado automaticamente!");
+        }
+      } catch (error) {
+        console.error("❌ Erro ao renovar token:", error);
+        token = await this.ctx.storage.get("twitch_access_token");
+      }
+    }
+
+    // Se ainda não tem token, pede re-autorização
+    if (!token) {
+      console.log("⚠️ Token inválido ou expirado. Reautorize o Twitch em: /twitch/login");
+      return;
+    }
+
+    // ===== CONECTA AO WEBSOCKET =====
     try {
       console.log("🟣 Conectando ao Twitch chat...");
       
@@ -912,7 +969,7 @@ export default {
   async fetch(request: Request, env: any) {
     const url = new URL(request.url);
 
-    // PRIMEIRO: Rotas do Twitch (MAIS ESPECÍFICAS)
+    // Rotas do Twitch
     if (url.pathname === "/twitch/reset") {
       try {
         const id = env.Chat.idFromName("bossfight");
@@ -974,7 +1031,15 @@ export default {
       }
     }
 
-    // DEPOIS: PartyKit (SEM ASSETS)
-    return await routePartykitRequest(request, { ...env });
+    // PartyKit
+    const response = await routePartykitRequest(request, { ...env });
+    if (response) return response;
+
+    // Assets (HTML)
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("Not found", { status: 404 });
   }
 };
