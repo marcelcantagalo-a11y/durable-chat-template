@@ -765,18 +765,21 @@ export class Chat extends Server<Env> {
       }
 
       if (data.type === "attack") {
-        const player = this.players.get(connection.id);
-        if (!player || !this.gameState || this.gameState.bossHp <= 0 || !player.alive) return;
+    // 🔥 USA O playerId ENVIADO PELO CLIENTE
+    const playerId = data.playerId || connection.id;
+    const player = this.players.get(playerId);
+    
+    if (!player || !this.gameState || this.gameState.bossHp <= 0 || !player.alive) return;
 
-        let attackChance;
-        if (player.class === "TANK") attackChance = 1.00;
-        else if (player.class === "WARRIOR") attackChance = 0.90;
-        else if (player.class === "ARCHER") attackChance = 0.80;
-        else if (player.class === "MAGE") attackChance = 0.70;
-        else attackChance = 1.00;
+    let attackChance;
+    if (player.class === "TANK") attackChance = 1.00;
+    else if (player.class === "WARRIOR") attackChance = 0.90;
+    else if (player.class === "ARCHER") attackChance = 0.80;
+    else if (player.class === "MAGE") attackChance = 0.70;
+    else attackChance = 1.00;
 
-        if (Math.random() > attackChance) {
-          this.broadcast(JSON.stringify({
+    if (Math.random() > attackChance) {
+        this.broadcast(JSON.stringify({
             type: "attackResult",
             playerId: player.id,
             name: player.name,
@@ -785,42 +788,42 @@ export class Chat extends Server<Env> {
             critical: false,
             bossHp: this.gameState.bossHp,
             maxBossHp: this.gameState.maxBossHp
-          }));
-          return;
-        }
-
-        let minDamage = 0, maxDamage = 0;
-        if (player.class === "TANK") { minDamage = 25; maxDamage = 45; }
-        else if (player.class === "WARRIOR") { minDamage = 50; maxDamage = 80; }
-        else if (player.class === "ARCHER") { minDamage = 35; maxDamage = 65; }
-        else if (player.class === "MAGE") { minDamage = 80; maxDamage = 130; }
-        else return;
-
-        let damage = Math.floor(Math.random() * (maxDamage - minDamage + 1)) + minDamage;
-        damage = Math.floor(damage * (1 + (player.level - 1) * 0.08));
-        const critical = Math.random() < 0.11;
-        if (critical) damage *= 2;
-        damage = Math.min(damage, this.gameState.bossHp);
-
-        this.gameState.bossHp -= damage;
-        player.totalDamage += damage;
-        this.players.set(connection.id, player);
-
-        this.broadcast(JSON.stringify({
-          type: "attackResult",
-          playerId: player.id,
-          name: player.name,
-          class: player.class,
-          hit: true,
-          damage: damage,
-          critical: critical,
-          bossHp: this.gameState.bossHp,
-          maxBossHp: this.gameState.maxBossHp,
-          totalDamage: player.totalDamage,
-          level: player.level
         }));
         return;
-      }
+    }
+
+    let minDamage = 0, maxDamage = 0;
+    if (player.class === "TANK") { minDamage = 25; maxDamage = 45; }
+    else if (player.class === "WARRIOR") { minDamage = 50; maxDamage = 80; }
+    else if (player.class === "ARCHER") { minDamage = 35; maxDamage = 65; }
+    else if (player.class === "MAGE") { minDamage = 80; maxDamage = 130; }
+    else return;
+
+    let damage = Math.floor(Math.random() * (maxDamage - minDamage + 1)) + minDamage;
+    damage = Math.floor(damage * (1 + (player.level - 1) * 0.08));
+    const critical = Math.random() < 0.11;
+    if (critical) damage *= 2;
+    damage = Math.min(damage, this.gameState.bossHp);
+
+    this.gameState.bossHp -= damage;
+    player.totalDamage += damage;
+    this.players.set(playerId, player); // USA playerId
+
+    this.broadcast(JSON.stringify({
+        type: "attackResult",
+        playerId: player.id,
+        name: player.name,
+        class: player.class,
+        hit: true,
+        damage: damage,
+        critical: critical,
+        bossHp: this.gameState.bossHp,
+        maxBossHp: this.gameState.maxBossHp,
+        totalDamage: player.totalDamage,
+        level: player.level
+    }));
+    return;
+}
 
       if (data.type === "bossAttack") {
         if (!this.gameState || this.gameState.bossHp <= 0) return;
