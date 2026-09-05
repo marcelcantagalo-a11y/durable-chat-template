@@ -5309,94 +5309,53 @@ requestAnimationFrame(() => {
 
 }
 function playerAttack(player){
-console.log("⚔️ ENVIANDO ATAQUE PARA:", player.name, "ID:", player.id);
-    /* =====================================
-       ⚔️ LOCAL PLAYER
-    ===================================== */
-
+    console.log("⚔️ ENVIANDO ATAQUE PARA:", player.name, "ID local:", player.id, "remoteId:", player.remoteId);
+    
     if(!player){
-
         return;
-
     }
-
 
     if(!player.alive){
-
         return;
-
     }
-
 
     if(battlePaused){
-
         return;
-
     }
 
-
-    if(
-        multiplayerSocket.readyState !==
-        WebSocket.OPEN
-    ){
-
+    if(multiplayerSocket.readyState !== WebSocket.OPEN){
         return;
-
     }
 
-
-    /* =====================================
-       🌐 SEND ATTACK REQUEST TO SERVER
-    ===================================== */
+    // ===== USA O remoteId (ID DO SERVIDOR) SE EXISTIR =====
+    const attackId = player.remoteId || player.id;
 
     multiplayerSocket.send(
-
         JSON.stringify({
-
             type:"attack",
-
-            playerId: player.id   // <-- ADICIONADO: envia o ID do jogador
-
+            playerId: attackId   // <-- AGORA USA O ID CORRETO
         })
-
     );
 
+    console.log("⚔️ ATTACK REQUEST SENT:", player.name, "attackId:", attackId);
 
-    console.log(
-
-        "⚔️ ATTACK REQUEST SENT:",
-        player.name
-
-    );
-
-
-    /* =====================================
-       ⚔️ LOCAL ATTACK ANIMATION
-    ===================================== */
-
+    // Animação (usando o ID local para o elemento DOM)
     const currentPlayerElement =
         document.getElementById(
             "player-" + player.id
         );
 
-
     if(currentPlayerElement){
-
         currentPlayerElement.classList.add(
             "attacking"
         );
 
-
         setTimeout(() => {
-
             currentPlayerElement.classList.remove(
                 "attacking"
             );
-
-        },350);
-
+        }, 350);
     }
-
 }
 
 
