@@ -3474,6 +3474,8 @@ if(data.type === "roomState"){
 
         else if(data.type === "bossAttackResult"){
 
+console.log(`👹 BOSS ATACOU: ${data.targetName} - ${data.damage} HP (HP restante: ${data.hp})`);
+           
             const targetPlayer =
                 players.find(
                     player =>
