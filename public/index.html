@@ -2640,11 +2640,11 @@ multiplayerSocket.onmessage = (event) => {
         );
 
 
-        /* =====================================
-           🌐 ESTADO DA SALA
-        ===================================== */
+/* =====================================
+   🌐 ESTADO DA SALA
+===================================== */
 
-        if(data.type === "roomState"){
+if(data.type === "roomState"){
 
     /* =====================================
        🔄 RESET OFICIAL DA BATALHA
@@ -2678,7 +2678,6 @@ multiplayerSocket.onmessage = (event) => {
         data.players
     );
 
-
     /* =====================================
        🎮 APLICA O ESTADO OFICIAL DA PARTIDA
     ===================================== */
@@ -2691,36 +2690,28 @@ multiplayerSocket.onmessage = (event) => {
         const previousBossLevel =
             bossLevel;
 
-
         bossLevel =
             data.gameState.bossLevel;
-
 
         currentBoss =
             data.gameState.currentBoss;
 
-
         maxBossHp =
             data.gameState.maxBossHp;
-
 
         bossHp =
             data.gameState.bossHp;
 
-
         wins =
             data.gameState.wins;
-
 
         console.log(
             "🎮 OFFICIAL GAME STATE:",
             data.gameState
         );
 
-
         /*
            👑 NOVO BOSS OFICIAL
-
            Quando o servidor avançar
            para o próximo Boss, todas
            as telas recebem este evento.
@@ -2738,11 +2729,9 @@ multiplayerSocket.onmessage = (event) => {
                 currentBoss.name
             );
 
-
             bossEnding = false;
 
             battlePaused = true;
-
 
             /*
                Remove flash antigo.
@@ -2751,7 +2740,6 @@ multiplayerSocket.onmessage = (event) => {
             flash.classList.remove(
                 "active"
             );
-
 
             /*
                Mostra o novo Boss.
@@ -2762,7 +2750,6 @@ multiplayerSocket.onmessage = (event) => {
                     "resultTitle"
                 );
 
-
             if(titleElement){
 
                 titleElement.textContent =
@@ -2770,21 +2757,17 @@ multiplayerSocket.onmessage = (event) => {
 
             }
 
-
             victoryBoss.textContent =
                 currentBoss.icon;
-
 
             victoryText.textContent =
                 currentBoss.name +
                 " — GET READY!";
 
-
             const nextBossNameElement =
                 document.getElementById(
                     "victoryNextBossName"
                 );
-
 
             if(nextBossNameElement){
 
@@ -2793,11 +2776,9 @@ multiplayerSocket.onmessage = (event) => {
 
             }
 
-
             victory.classList.add(
                 "active"
             );
-
 
             /*
                Após a entrada do Boss,
@@ -2810,9 +2791,7 @@ multiplayerSocket.onmessage = (event) => {
                     "active"
                 );
 
-
                 battlePaused = false;
-
 
                 if(currentBoss.special){
 
@@ -2820,7 +2799,6 @@ multiplayerSocket.onmessage = (event) => {
                         "👑 LEGENDARY BOSS! " +
                         currentBoss.name +
                         " ENTERED THE ARENA!";
-
 
                     addEvent(
                         "👑 SPECIAL BOSS LV." +
@@ -2834,7 +2812,6 @@ multiplayerSocket.onmessage = (event) => {
                         bossLevel +
                         " ENTERED THE ARENA!";
 
-
                     addEvent(
                         "🔥 New Boss LV." +
                         bossLevel
@@ -2842,9 +2819,7 @@ multiplayerSocket.onmessage = (event) => {
 
                 }
 
-
                 update();
-
 
             },2500);
 
@@ -2854,187 +2829,176 @@ multiplayerSocket.onmessage = (event) => {
 
     }
 
-
     /* =====================================
        👥 JOGADORES
     ===================================== */
 
     data.players.forEach(
-    remotePlayer => {
+        remotePlayer => {
 
-        /*
-           Procura o jogador local.
-        */
+            /*
+               Procura o jogador local.
+            */
 
-        const localPlayer =
-            players.find(
-                player =>
-                    !player.remoteId
-            );
+            const localPlayer =
+                players.find(
+                    player =>
+                        !player.remoteId
+                );
 
+            /*
+               Se o servidor devolveu
+               o próprio jogador local,
+               vincula o ID do servidor.
+            */
 
-        /*
-           Se o servidor devolveu
-           o próprio jogador local,
-           vincula o ID do servidor.
-        */
-
-        if(
-            localPlayer &&
-            localPlayer.name ===
-                remotePlayer.name &&
-            localPlayer.class ===
-                remotePlayer.class
-        ){
-
-            localPlayer.remoteId =
-                remotePlayer.id;
-
-
-            localPlayer.serverPosition =
-                remotePlayer.position;
-
-
-            console.log(
-                "✅ LOCAL PLAYER LINKED:",
-                localPlayer.name
-            );
-
-
-            return;
-
-        }
-
-
-        /*
-           Verifica se o jogador remoto
-           já existe.
-        */
-
-        const alreadyExists =
-            players.some(
-                player =>
-                    player.remoteId ===
-                    remotePlayer.id
-            );
-
-
-        if(alreadyExists){
-            return;
-        }
-
-
-        /*
-           Jogador realmente remoto.
-        */
-
-        const classData =
-            classes.find(
-                c =>
-                    c.name ===
+            if(
+                localPlayer &&
+                localPlayer.name ===
+                    remotePlayer.name &&
+                localPlayer.class ===
                     remotePlayer.class
-            );
+            ){
 
+                localPlayer.remoteId =
+                    remotePlayer.id;
 
-        if(!classData){
-            return;
-        }
+                localPlayer.serverPosition =
+                    remotePlayer.position;
 
+                console.log(
+                    "✅ LOCAL PLAYER LINKED:",
+                    localPlayer.name
+                );
 
-        const remotePlayerObject = {
+                return;
 
-            id:
-                nextPlayerId++,
+            }
 
-            remoteId:
-                remotePlayer.id,
+            /*
+               Verifica se o jogador remoto
+               já existe.
+            */
 
-            serverPosition:
-                remotePlayer.position,
+            const alreadyExists =
+                players.some(
+                    player =>
+                        player.remoteId ===
+                        remotePlayer.id
+                );
 
-            name:
-                remotePlayer.name,
+            if(alreadyExists){
+                return;
+            }
 
-            class:
-                remotePlayer.class,
+            /*
+               Jogador realmente remoto.
+            */
 
-            icon:
-                classIcons[
-                    remotePlayer.class
+            const classData =
+                classes.find(
+                    c =>
+                        c.name ===
+                        remotePlayer.class
+                );
+
+            if(!classData){
+                return;
+            }
+
+            const remotePlayerObject = {
+
+                id:
+                    nextPlayerId++,
+
+                remoteId:
+                    remotePlayer.id,
+
+                serverPosition:
+                    remotePlayer.position,
+
+                name:
+                    remotePlayer.name,
+
+                class:
+                    remotePlayer.class,
+
+                icon:
+                    classIcons[
+                        remotePlayer.class
+                    ],
+
+                damage:[
+                    classData.damage[0],
+                    classData.damage[1]
                 ],
 
-            damage:[
-                classData.damage[0],
-                classData.damage[1]
-            ],
+                speed:
+                    classData.speed,
 
-            speed:
-                classData.speed,
+                level:
+                    remotePlayer.level ||
+                    1,
 
-            level:
-                remotePlayer.level ||
-                1,
+                xp:
+                    remotePlayer.xp ||
+                    0,
 
-            xp:
-                remotePlayer.xp ||
-                0,
+                nextXp:
+                    100,
 
-            nextXp:
-                100,
+                maxHp:
+                    remotePlayer.maxHp ||
+                    classData.hp,
 
-            maxHp:
-                remotePlayer.maxHp ||
-                classData.hp,
+                hp:
+                    remotePlayer.hp ??
+                    classData.hp,
 
-            hp:
-                remotePlayer.hp ??
-                classData.hp,
+                alive:
+                    remotePlayer.alive ??
+                    true,
 
-            alive:
-                remotePlayer.alive ??
-                true,
+                totalDamage:
+                    remotePlayer.totalDamage ||
+                    0,
 
-            totalDamage:
-                remotePlayer.totalDamage ||
-                0,
+                healing:
+                    remotePlayer.healing ||
+                    0,
 
-            healing:
-                remotePlayer.healing ||
-                0,
+                isAI:
+                    remotePlayer.isAI === true
 
-            isAI:
-                remotePlayer.isAI === true
+            };
 
-        };
+            players.push(
+                remotePlayerObject
+            );
 
+            createPlayerUI(
+                remotePlayerObject
+            );
 
-        players.push(
-            remotePlayerObject
-        );
+            // ===== INICIA ATAQUE PARA HUMANOS (roomState) =====
+            if (!remotePlayerObject.isAI) {
+                startPlayerAI(remotePlayerObject);
+                console.log("⚔️ ATAQUE INICIADO PARA (roomState):", remotePlayerObject.name);
+            }
 
+            addEvent(
+                remotePlayerObject.icon +
+                " " +
+                remotePlayerObject.name +
+                " joined!"
+            );
 
-        createPlayerUI(
-            remotePlayerObject
-        );
-
-        // ===== INICIA ATAQUE PARA HUMANOS (roomState) =====
-        if (!remotePlayerObject.isAI) {
-            startPlayerAI(remotePlayerObject);
-            console.log("⚔️ ATAQUE INICIADO PARA (roomState):", remotePlayerObject.name);
         }
+    );
 
-        addEvent(
-            remotePlayerObject.icon +
-            " " +
-            remotePlayerObject.name +
-            " joined!"
-        );
+    update();
 
-    }
-);
-
-
-update();
+} // FIM DO roomState
 
 
         /* =====================================
